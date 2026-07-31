@@ -1,0 +1,132 @@
+// Generic client for any OpenAI-compatible endpoint
+// (LM Studio, Ollama, llama.cpp, vLLM, Public AI, OpenAI, etc.)
+//
+// When running inside Electron, requests are routed through the main process
+// (Node.js networking) so CORS never applies. In a plain browser, requests
+// go through fetch() directly and the endpoint must allow cross-origin
+// requests (LM Studio: enable CORS in server settings; Ollama: OLLAMA_ORIGINS).
+
+// Bridge exposed by electron/preload.cjs
+interface AiBridge {
+  request(args: {
+    url: string
+    method: string
+    headers: Record<string, string>
+    body: string
+  }): Promise<{ ok: boolean; status: number; statusText: string; body: string }>
+}
+
+function getBridge(): AiBridge | undefined {
+  return (window as unknown as { aiBridge?: AiBridge }).aiBridge
+}
+
+export interface EndpointConfig {
+  baseUrl: string // e.g. http://localhost:1234/v1 or https://api.publicai.co/v1
+  apiKey: string  // may be empty for local servers
+  model: string
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+function headers(cfg: EndpointConfig): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (cfg.apiKey) h['Authorization'] = `Bearer ${cfg.apiKey}`
+  return h
+}
+
+async function request(cfg: EndpointConfig, path: string, body: object, signal?: AbortSignal): Promise<Response> {
+  const url = `${cfg.baseUrl.replace(/\/$/, '')}${path}`
+  const bridge = getBridge()
+  if (bridge) {
+    // Electron: CORS-free request via the main process
+    const res = await bridge.request({
+      url,
+      method: 'POST',
+      headers: headers(cfg),
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      if (res.status === 0) throw new TypeError(res.statusText)
+      throw new Error(`${res.status} ${res.statusText}${res.body ? ` — ${res.body.slice(0, 200)}` : ''}`)
+    }
+    return new Response(res.body, { status: 200 })
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: headers(cfg),
+    signal,
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail.slice(0, 200)}` : ''}`)
+  }
+  return res
+}
+
+// Autocomplete uses the raw completions endpoint (not chat completions):
+// the document text before the cursor is sent verbatim as the prompt, with
+// no system prompt or chat template — appropriate for base models.
+export async function autocomplete(
+  cfg: EndpointConfig,
+  context: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await request(cfg, '/completions', {
+    model: cfg.model,
+    prompt: context,
+    max_tokens: 48,
+    temperature: 0.3,
+    stop: ['\n\n', '</s>'],
+  }, signal)
+  const data = await res.json()
+  const text: string = data.choices?.[0]?.text ?? ''
+  return text.replace(/\s+$/, '')
+}
+
+export async function chat(cfg: EndpointConfig, messages: ChatMessage[], maxTokens = 1024): Promise<string> {
+  const res = await request(cfg, '/chat/completions', {
+    model: cfg.model,
+    messages,
+    temperature: 0.7,
+    max_tokens: maxTokens,
+    stop: ['---'],
+  })
+  const data = await res.json()
+  let text: string = data.choices?.[0]?.message?.content ?? ''
+  // Belt-and-suspenders: some servers ignore `stop`; cut anything from '---' on
+  const cut = text.indexOf('---')
+  if (cut !== -1) text = text.slice(0, cut)
+  return text.trimEnd()
+}
+
+// Quick connectivity check — returns null on success, error message on failure.
+// kind selects which API style to probe ('completions' for base models,
+// 'chat' for instruct/chat models).
+export async function testConnection(cfg: EndpointConfig, kind: 'completions' | 'chat' = 'chat'): Promise<string | null> {
+  try {
+    if (kind === 'completions') {
+      const res = await request(cfg, '/completions', {
+        model: cfg.model,
+        prompt: 'The capital of France is',
+        max_tokens: 5,
+      })
+      await res.json()
+    } else {
+      const res = await request(cfg, '/chat/completions', {
+        model: cfg.model,
+        messages: [{ role: 'user', content: 'Say "ok".' }],
+        max_tokens: 5,
+      })
+      await res.json()
+    }
+    return null
+  } catch (err) {
+    return err instanceof TypeError
+      ? 'Network error — is the server running and reachable? (In a plain browser, the endpoint must also allow CORS; the Electron app has no such restriction.)'
+      : String(err)
+  }
+}

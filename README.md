@@ -1,2 +1,53 @@
 # apertus-writer
-A minimalist document editor with AI autocomplete features
+
+A WYSIWYG-first markdown editor with AI autocomplete and chat, powered by Apertus models.
+
+Unlike traditional markdown editors, there is no code/preview split — you edit the **rendered document directly** and it saves as markdown (`.md`).
+
+## Features
+
+- **Direct rich-text editing** of markdown documents (TipTap/ProseMirror), with markdown round-trip via `marked` + `turndown`
+- **Toolbar ribbon**: bold, italic, strikethrough, inline code, code blocks, headings 1–4, bullet/numbered lists, blockquotes, tables, images, horizontal rules, undo/redo
+- **CSS style themes**: edit fonts, colors, sizes, and page width live; save/load themes as standalone `.css` files
+- **AI autocomplete**: pause while typing and a ghost-text suggestion appears (grey italic); press **Ctrl-Space** to accept, **Esc** to dismiss. Defaults to `apertus-v1.1-4b` on a local LM Studio Server
+- **Chat sidebar**: talk about your document with an AI model (defaults to `apertus-v1.1-4b-instruct` on LM Studio). The current document is included as context by default (toggleable); you can also attach other `.md`/`.txt` files or paste URLs as extra context
+- **Any OpenAI-compatible endpoint** works for both features (LM Studio, Public AI, OpenAI, Ollama…) — configure base URL, model, and API key in ⚙️ Settings, with a built-in "Test connection" button
+- **Export to Word (.docx), OpenDocument (.odt), and PDF** with the active CSS theme applied — docx/odt are generated in-app with the theme mapped to native styles (fonts, colors, sizes, code shading, table styling), no external tools required; PDF is rendered from the themed HTML directly
+
+## Getting started
+
+**Desktop app (recommended)** — runs in Electron, which makes API requests outside the browser sandbox, so **CORS never applies** and any endpoint works (local servers, third-party hosted APIs):
+
+```bash
+npm install
+npm run dev:electron
+```
+
+**Plain browser** — works too, but the endpoint must allow cross-origin requests (LM Studio: enable CORS in server settings; Ollama: set `OLLAMA_ORIGINS`):
+
+```bash
+npm run dev   # then open http://localhost:5173
+```
+
+### Prerequisites
+
+By default the app expects **LM Studio** with the local server running on port `1234` and these models loaded:
+- `apertus-v1.1-4b` (autocomplete, base model — uses the raw `/completions` endpoint)
+- `apertus-v1.1-4b-instruct` (chat — uses `/chat/completions`)
+
+To use a different provider (e.g. the [Public AI Inference Utility](https://platform.publicai.co/api/~endpoints) for `Apertus-70B-instruct-2509`), open ⚙️ Settings and set the base URL, model name, and API key for each feature. Settings persist across sessions.
+
+## Usage
+
+| Action | How |
+|---|---|
+| Open document | "Open" button → pick a `.md` file |
+| Save document | Ctrl-S or "Save" (downloads the `.md` file) |
+| Accept autocomplete | Ctrl-Space |
+| Dismiss suggestion | Esc |
+| Style theme | 🎨 Styles panel → tweak values → "Save theme .css" |
+| Chat | 💬 Chat sidebar → pick local or cloud model |
+
+## Tech stack
+
+Vite + React + TypeScript + Electron, TipTap (ProseMirror), marked/turndown for markdown conversion. Autocomplete uses the OpenAI-compatible `/completions` API (base models); chat uses `/chat/completions`. In Electron, API calls are routed through the main process via IPC so no CORS restrictions apply. Exports: docx via the `docx` library, odt via hand-built ODF XML zipped with `jszip` — both with theme styles applied — and PDF via Electron `printToPDF` (browser fallback: print → Save as PDF).

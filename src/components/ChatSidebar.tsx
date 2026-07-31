@@ -1,0 +1,139 @@
+import { useRef, useState } from 'react'
+import { marked } from 'marked'
+import { chat, type ChatMessage } from '../api/openai'
+import type { Settings } from '../store/settings'
+import {
+  useContextItems, addContextItems, removeContextItem,
+  fetchUrlContext, fileToContext,
+} from '../store/context'
+
+interface Props {
+  settings: Settings
+  getDocumentMarkdown: () => string
+  onClose: () => void
+}
+
+export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [includeDoc, setIncludeDoc] = useState(true)
+  const extras = useContextItems()
+  const [urlInput, setUrlInput] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  const scrollDown = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files) return
+    addContextItems(await Promise.all(Array.from(files).map(fileToContext)))
+  }
+
+  const addUrl = async () => {
+    const url = urlInput.trim()
+    if (!url) return
+    setUrlInput('')
+    try {
+      addContextItems([await fetchUrlContext(url)])
+    } catch (err) {
+      alert(`Could not fetch ${url}: ${err}`)
+    }
+  }
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || busy) return
+    setInput('')
+    const history: ChatMessage[] = [...messages, { role: 'user', content: text }]
+    setMessages(history)
+    setBusy(true)
+    scrollDown()
+
+    let system =
+      'You are a helpful writing assistant embedded in a markdown document editor. ' +
+      'Answer briefly and directly — at most a few short paragraphs. ' +
+      'Do not repeat yourself, do not ask follow-up questions unless necessary, ' +
+      'and stop when you have answered.'
+    if (includeDoc) {
+      system += `\n\nThe user is editing the following document:\n---\n${getDocumentMarkdown()}\n---`
+    }
+    for (const ex of extras) {
+      system += `\n\nAdditional context from ${ex.kind} "${ex.name}":\n---\n${ex.content}\n---`
+    }
+
+    try {
+      const reply = await chat(settings.chat, [{ role: 'system', content: system }, ...history], 1024)
+      setMessages([...history, { role: 'assistant', content: reply }])
+    } catch (err) {
+      setMessages([...history, { role: 'assistant', content: `⚠️ Error: ${err}` }])
+    }
+    setBusy(false)
+    scrollDown()
+  }
+
+  return (
+    <div className="chat-sidebar">
+      <div className="panel-header">
+        <strong>Chat</strong>
+        <span className="chat-model-name" title={settings.chat.baseUrl}>{settings.chat.model}</span>
+        <button className="tb-btn" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="chat-controls">
+        <label className="chat-ctx-toggle">
+          <input type="checkbox" checked={includeDoc} onChange={(e) => setIncludeDoc(e.target.checked)} />
+          Include document as context
+        </label>
+      </div>
+
+      <div className="chat-extras">
+        {extras.map((ex, i) => (
+          <span key={i} className="ctx-chip" title={ex.name}>
+            {ex.kind === 'url' ? '🔗' : '📄'} {ex.name.slice(0, 30)}
+            <button onClick={() => removeContextItem(i)}>✕</button>
+          </span>
+        ))}
+        <div className="ctx-add">
+          <button className="tb-btn" onClick={() => fileRef.current?.click()}>+ File</button>
+          <input ref={fileRef} type="file" multiple accept=".md,.txt,.markdown" hidden
+            onChange={(e) => addFiles(e.target.files)} />
+          <input placeholder="Add URL…" value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addUrl()} />
+        </div>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((m, i) => (
+          <div key={i} className={`chat-msg ${m.role}`}>
+            <div className="chat-role">{m.role === 'user' ? 'You' : 'AI'}</div>
+            {m.role === 'assistant' ? (
+              <div
+                className="chat-text markdown"
+                dangerouslySetInnerHTML={{ __html: marked.parse(m.content, { async: false }) as string }}
+              />
+            ) : (
+              <div className="chat-text">{m.content}</div>
+            )}
+          </div>
+        ))}
+        {busy && <div className="chat-msg assistant"><div className="chat-text">…thinking…</div></div>}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="chat-input">
+        <textarea
+          value={input}
+          placeholder="Ask about your document…"
+          rows={3}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+          }}
+        />
+        <button className="tb-btn send" onClick={send} disabled={busy}>Send</button>
+      </div>
+    </div>
+  )
+}
