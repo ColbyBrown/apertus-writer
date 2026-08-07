@@ -3,8 +3,11 @@
 
 export interface Bridge {
   request(args: {
-    url: string; method: string; headers: Record<string, string>; body: string
+    url: string; method: string; headers: Record<string, string>; body?: string
   }): Promise<{ ok: boolean; status: number; statusText: string; body: string }>
+  chooseOpenPath(): Promise<{ canceled: boolean; filePath?: string }>
+  readFile(args: { filePath: string }): Promise<{ ok: boolean; content?: string; error?: string }>
+  chooseSavePath(args: { docName: string }): Promise<{ canceled: boolean; filePath?: string }>
   chooseExportPath(args: { docName: string }): Promise<{ canceled: boolean; filePath?: string; format?: 'docx' | 'odt' | 'pdf' }>
   writeFile(args: { filePath: string; base64: string }): Promise<{ ok: boolean; error?: string }>
   exportPdfTo(args: { filePath: string; html: string; css: string }): Promise<{ ok: boolean; error?: string }>

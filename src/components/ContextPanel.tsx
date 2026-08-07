@@ -5,8 +5,10 @@ import {
   useContextItems, addContextItems, removeContextItem,
   fetchUrlContext, fileToContext,
 } from '../store/context'
+import { summarizeInBackground } from '../store/summarize'
+import type { Settings } from '../store/settings'
 
-export default function ContextPanel({ onClose }: { onClose: () => void }) {
+export default function ContextPanel({ settings, onClose }: { settings: Settings; onClose: () => void }) {
   const items = useContextItems()
   const [urlInput, setUrlInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -14,8 +16,12 @@ export default function ContextPanel({ onClose }: { onClose: () => void }) {
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return
-    const added = await Promise.all(Array.from(files).map(fileToContext))
+    const results = await Promise.allSettled(Array.from(files).map(fileToContext))
+    const added = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
     addContextItems(added)
+    summarizeInBackground(added, settings.chat)
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failed.length > 0) alert(`Could not read ${failed.length} file(s):\n${failed.map((f) => String(f.reason)).join('\n')}`)
   }
 
   const addUrl = async () => {
@@ -24,7 +30,9 @@ export default function ContextPanel({ onClose }: { onClose: () => void }) {
     setUrlInput('')
     setBusy(true)
     try {
-      addContextItems([await fetchUrlContext(url)])
+      const item = await fetchUrlContext(url)
+      addContextItems([item])
+      summarizeInBackground([item], settings.chat)
     } catch (err) {
       alert(`Could not fetch ${url}: ${err}`)
     }
@@ -44,15 +52,16 @@ export default function ContextPanel({ onClose }: { onClose: () => void }) {
       {items.length === 0 && <p className="context-panel-empty">No reference documents attached.</p>}
       <div className="context-panel-items">
         {items.map((ex, i) => (
-          <span key={i} className="ctx-chip" title={ex.name}>
-            {ex.kind === 'url' ? '🔗' : '📄'} {ex.name.slice(0, 40)}
+          <span key={i} className="ctx-chip"
+            title={ex.summary === undefined ? `${ex.name} (summarizing…)` : ex.name}>
+            {ex.summary === undefined ? '⏳' : ex.kind === 'url' ? '🔗' : '📄'} {ex.name.slice(0, 40)}
             <button onClick={() => removeContextItem(i)}>✕</button>
           </span>
         ))}
       </div>
       <div className="ctx-add">
         <button className="tb-btn" onClick={() => fileRef.current?.click()}>+ File</button>
-        <input ref={fileRef} type="file" multiple accept=".md,.txt,.markdown" hidden
+        <input ref={fileRef} type="file" multiple accept=".md,.txt,.markdown,.pdf,.docx,.odt" hidden
           onChange={(e) => addFiles(e.target.files)} />
         <input placeholder="Add URL…" value={urlInput} disabled={busy}
           onChange={(e) => setUrlInput(e.target.value)}

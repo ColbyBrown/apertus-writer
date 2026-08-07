@@ -1,13 +1,12 @@
-// TipTap extension: inline ghost-text autocomplete.
-// Suggestion is rendered as a decoration widget; Ctrl-Space accepts, Esc dismisses.
+// TipTap extension: inline ghost-text autocomplete, triggered manually.
+// Ctrl-Space requests a suggestion, Tab accepts it, any other key or action
+// (typing, cursor move, click, Esc) dismisses it.
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
 export interface AutocompleteOptions {
   fetchSuggestion: (context: string) => Promise<string>
-  debounceMs: number
-  enabled: boolean
 }
 
 export const AutocompleteKey = new PluginKey('autocomplete')
@@ -15,6 +14,7 @@ export const AutocompleteKey = new PluginKey('autocomplete')
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     autocomplete: {
+      requestSuggestion: () => ReturnType
       acceptSuggestion: () => ReturnType
       dismissSuggestion: () => ReturnType
     }
@@ -27,13 +27,32 @@ export const Autocomplete = Extension.create<AutocompleteOptions>({
   addOptions() {
     return {
       fetchSuggestion: async () => '',
-      debounceMs: 800,
-      enabled: true,
     }
   },
 
   addCommands() {
     return {
+      requestSuggestion:
+        () =>
+        ({ view, state }) => {
+          const { selection } = state
+          if (!selection.empty) return false
+          const pos = selection.from
+          // Gather context: text before cursor (up to ~1500 chars)
+          const before = state.doc.textBetween(Math.max(0, pos - 1500), pos, '\n', ' ')
+          if (before.trim().length < 10) return false
+          // Fire and forget; the suggestion is set as plugin meta when it arrives
+          this.options
+            .fetchSuggestion(before)
+            .then((text) => {
+              if (!text) return
+              // Only apply if the cursor hasn't moved
+              if (view.state.selection.from !== pos) return
+              view.dispatch(view.state.tr.setMeta(AutocompleteKey, { set: { text, pos } }))
+            })
+            .catch(() => { /* ignore */ })
+          return true
+        },
       acceptSuggestion:
         () =>
         ({ tr, dispatch }) => {
@@ -56,16 +75,15 @@ export const Autocomplete = Extension.create<AutocompleteOptions>({
 
   addKeyboardShortcuts() {
     return {
-      'Mod-Space': () => this.editor.commands.acceptSuggestion(),
+      'Mod-Space': () => this.editor.commands.requestSuggestion(),
+      // Tab accepts only when a suggestion is showing; otherwise it falls
+      // through to normal Tab behavior.
+      Tab: () => this.editor.commands.acceptSuggestion(),
       Escape: () => this.editor.commands.dismissSuggestion(),
     }
   },
 
   addProseMirrorPlugins() {
-    const options = this.options
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
-    let abort: AbortController | null = null
-
     return [
       new Plugin({
         key: AutocompleteKey,
@@ -81,7 +99,7 @@ export const Autocomplete = Extension.create<AutocompleteOptions>({
                   const span = document.createElement('span')
                   span.className = 'ghost-suggestion'
                   span.textContent = text
-                  span.title = 'Ctrl-Space to accept'
+                  span.title = 'Tab to accept'
                   return span
                 },
                 { side: 1, key: 'ghost' },
@@ -109,45 +127,6 @@ export const Autocomplete = Extension.create<AutocompleteOptions>({
           decorations(state) {
             return AutocompleteKey.getState(state)?.decorations
           },
-        },
-        view() {
-          return {
-            update: (view) => {
-              if (!options.enabled) return
-              const state = AutocompleteKey.getState(view.state)
-              if (state?.suggestion) return
-              const { selection } = view.state
-              if (!selection.empty) return
-              if (debounceTimer) clearTimeout(debounceTimer)
-              debounceTimer = setTimeout(async () => {
-                const pos = selection.from
-                // Gather context: text before cursor (up to ~1500 chars)
-                const before = view.state.doc.textBetween(
-                  Math.max(0, pos - 1500),
-                  pos,
-                  '\n',
-                  ' ',
-                )
-                if (before.trim().length < 10) return
-                if (abort) abort.abort()
-                abort = new AbortController()
-                try {
-                  const text = await options.fetchSuggestion(before)
-                  if (!text) return
-                  // Only apply if cursor hasn't moved
-                  if (view.state.selection.from !== pos) return
-                  const tr = view.state.tr.setMeta(AutocompleteKey, { set: { text, pos } })
-                  view.dispatch(tr)
-                } catch {
-                  /* ignore */
-                }
-              }, options.debounceMs)
-            },
-            destroy: () => {
-              if (debounceTimer) clearTimeout(debounceTimer)
-              if (abort) abort.abort()
-            },
-          }
         },
       }),
     ]

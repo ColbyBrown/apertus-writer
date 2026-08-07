@@ -133,6 +133,27 @@ ipcMain.handle('ai-request', async (_event, { url, method, headers, body }) => {
   }
 })
 
+// IPC: show an open dialog for markdown/text files. → { canceled, filePath? }
+// Needed because Chromium only shows a file chooser on a user activation, so a
+// menu-triggered input.click() in the renderer is silently ignored.
+ipcMain.handle('choose-open-path', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [{ name: 'Markdown/Text', extensions: ['md', 'markdown', 'txt'] }],
+  })
+  if (canceled || filePaths.length === 0) return { canceled: true }
+  return { canceled: false, filePath: filePaths[0] }
+})
+
+// IPC: read a UTF-8 text file. → { ok, content?, error? }
+ipcMain.handle('read-file', async (_event, { filePath }) => {
+  try {
+    return { ok: true, content: fs.readFileSync(filePath, 'utf8') }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
 // IPC: show a save dialog with export format filters; the chosen filter
 // determines the format. → { canceled, filePath?, format? }
 ipcMain.handle('choose-export-path', async (_event, { docName }) => {
@@ -148,6 +169,19 @@ ipcMain.handle('choose-export-path', async (_event, { docName }) => {
   if (canceled || !filePath) return { canceled: true }
   const format = (filePath.match(/\.(docx|odt|pdf)$/i)?.[1] || 'docx').toLowerCase()
   return { canceled: false, filePath, format }
+})
+
+// IPC: show a save dialog for markdown files. → { canceled, filePath? }
+ipcMain.handle('choose-save-path', async (_event, { docName }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: docName || 'untitled.md',
+    filters: [
+      { name: 'Markdown', extensions: ['md', 'markdown'] },
+      { name: 'Text', extensions: ['txt'] },
+    ],
+  })
+  if (canceled || !filePath) return { canceled: true }
+  return { canceled: false, filePath }
 })
 
 // IPC: write base64-encoded bytes to a file. → { ok, error? }

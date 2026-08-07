@@ -6,6 +6,7 @@ import {
   useContextItems, addContextItems, removeContextItem,
   fetchUrlContext, fileToContext,
 } from '../store/context'
+import { summarizeInBackground } from '../store/summarize'
 
 interface Props {
   settings: Settings
@@ -27,7 +28,12 @@ export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: 
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return
-    addContextItems(await Promise.all(Array.from(files).map(fileToContext)))
+    const results = await Promise.allSettled(Array.from(files).map(fileToContext))
+    const added = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+    addContextItems(added)
+    summarizeInBackground(added, settings.chat)
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failed.length > 0) alert(`Could not read ${failed.length} file(s):\n${failed.map((f) => String(f.reason)).join('\n')}`)
   }
 
   const addUrl = async () => {
@@ -35,7 +41,9 @@ export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: 
     if (!url) return
     setUrlInput('')
     try {
-      addContextItems([await fetchUrlContext(url)])
+      const item = await fetchUrlContext(url)
+      addContextItems([item])
+      summarizeInBackground([item], settings.chat)
     } catch (err) {
       alert(`Could not fetch ${url}: ${err}`)
     }
@@ -96,7 +104,7 @@ export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: 
         ))}
         <div className="ctx-add">
           <button className="tb-btn" onClick={() => fileRef.current?.click()}>+ File</button>
-          <input ref={fileRef} type="file" multiple accept=".md,.txt,.markdown" hidden
+          <input ref={fileRef} type="file" multiple accept=".md,.txt,.markdown,.pdf,.docx,.odt" hidden
             onChange={(e) => addFiles(e.target.files)} />
           <input placeholder="Add URL…" value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}

@@ -25,15 +25,17 @@ const WELCOME_MD = `# Welcome to Apertus Writer
 This is a **WYSIWYG markdown editor** — you edit the rendered document directly, and it saves as markdown.
 
 - Use the toolbar above to format text
-- Press **Ctrl-Space** to accept an AI autocomplete suggestion
+- Press **Ctrl-Space** to request an AI autocomplete suggestion, **Tab** to accept it
 - Open the **chat sidebar** to talk with AI about your document
 
-Try typing a sentence and pausing — the AI will suggest a continuation.
+Try typing a sentence and pressing **Ctrl-Space** — the AI will suggest a continuation.
 `
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [docName, setDocName] = useState('untitled.md')
+  // On-disk path of the current document (Electron); null = never saved to disk.
+  const [filePath, setFilePath] = useState<string | null>(null)
   const [theme, setTheme] = useState<ThemeVars>(DEFAULT_THEME)
   const [themeName, setThemeName] = useState('Default')
   const [showStyles, setShowStyles] = useState(false)
@@ -42,6 +44,8 @@ export default function App() {
   const [showContext, setShowContext] = useState(false)
   const contextCount = useContextItems().length
   const [dirty, setDirty] = useState(false)
+  const [codeView, setCodeView] = useState(false)
+  const [codeText, setCodeText] = useState('')
   const openFileRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
   const styleTagRef = useRef<HTMLStyleElement | null>(null)
@@ -57,14 +61,40 @@ export default function App() {
   // one (the final, unclosed <s>). No instruction text is added, so nothing
   // can leak into suggestions.
   const fetchSuggestion = useCallback(async (context: string) => {
-    const refs = getContextItems()
-    let prompt = context
-    if (refs.length > 0) {
-      const wrapped = refs.map((r) => `<s>${r.content.slice(0, 4000)}</s>`).join('')
-      prompt = `${wrapped}<s>${context}`
+    // Guard: don't attempt a network call when the endpoint isn't configured.
+    const cfg = settingsRef.current.autocomplete
+    if (!cfg.baseUrl?.trim() || !cfg.model?.trim()) {
+      setAiError('Autocomplete not configured — set a base URL and model in Settings.')
+      return ''
     }
+    // Total budget for reference docs, sized to fit typical LM Studio context
+    // lengths (4096 tokens ≈ 16k chars) alongside the 1.5k-char document
+    // context and generation headroom.
+    const REF_BUDGET = 6000
+    const refs = getContextItems()
+    let wrapped = ''
+    if (refs.length > 0) {
+      let budget = REF_BUDGET
+      for (const r of refs) {
+        // Prefer the instruct-model summary; fall back to a raw head excerpt
+        // while summarization is pending or if it failed.
+        const text = r.summary || r.content.slice(0, 1000)
+        if (text.length > budget) continue
+        budget -= text.length
+        wrapped += `<s>${text}</s>`
+      }
+    }
+    const buildPrompt = (withRefs: boolean) =>
+      withRefs && wrapped ? `${wrapped}<s>${context}` : context
     try {
-      const text = await ai.autocomplete(settingsRef.current.autocomplete, prompt)
+      let text: string
+      try {
+        text = await ai.autocomplete(settingsRef.current.autocomplete, buildPrompt(true))
+      } catch (err) {
+        // Context window exceeded despite budgeting: retry without references.
+        if (!wrapped || !/400|context/i.test(String(err))) throw err
+        text = await ai.autocomplete(settingsRef.current.autocomplete, buildPrompt(false))
+      }
       setAiError(null)
       return text
     } catch (err) {
@@ -78,12 +108,12 @@ export default function App() {
       StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
       Image,
       Link.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: 'Start writing… (pause for AI suggestions)' }),
+      Placeholder.configure({ placeholder: 'Start writing… (Ctrl-Space for an AI suggestion)' }),
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
       TableCell,
-      Autocomplete.configure({ fetchSuggestion, debounceMs: 900, enabled: settings.autocompleteEnabled }),
+      Autocomplete.configure({ fetchSuggestion }),
     ],
     content: markdownToHtml(WELCOME_MD),
     onUpdate: () => setDirty(true),
@@ -110,9 +140,24 @@ export default function App() {
   }, [theme])
 
   const getMarkdown = useCallback(() => {
+    if (codeView) return codeText
     if (!editor) return ''
     return htmlToMarkdown(editor.getHTML())
-  }, [editor])
+  }, [editor, codeView, codeText])
+
+  // Toggle between WYSIWYG editing and raw markdown code view
+  const toggleCodeView = useCallback(() => {
+    if (!codeView) {
+      if (!editor) return
+      setCodeText(htmlToMarkdown(editor.getHTML()))
+      setCodeView(true)
+    } else {
+      const before = getMarkdown()
+      if (codeText !== before) setDirty(true)
+      editor?.commands.setContent(markdownToHtml(codeText))
+      setCodeView(false)
+    }
+  }, [codeView, codeText, editor, getMarkdown])
 
   // File operations
   const newDocument = () => {
@@ -120,18 +165,59 @@ export default function App() {
     editor?.commands.setContent('')
     editor?.commands.focus()
     setDocName('untitled.md')
+    setFilePath(null)
+    setDirty(false)
+  }
+
+  const loadMarkdown = (text: string, name: string, path: string | null = null) => {
+    editor?.commands.setContent(markdownToHtml(text))
+    setDocName(name)
+    setFilePath(path)
     setDirty(false)
   }
 
   const openDocument = async (file: File) => {
-    const text = await file.text()
-    editor?.commands.setContent(markdownToHtml(text))
-    setDocName(file.name)
-    setDirty(false)
+    loadMarkdown(await file.text(), file.name)
   }
 
-  const saveDocument = () => {
+  // Open: in Electron, use the native open dialog via the bridge — a menu
+  // action can't trigger the hidden <input type="file"> click because
+  // Chromium only shows a file chooser on a user activation. In a plain
+  // browser, fall back to the input (real clicks provide activation).
+  const openViaDialog = async () => {
+    const bridge = getBridge()
+    if (!bridge?.chooseOpenPath) {
+      openFileRef.current?.click()
+      return
+    }
+    const choice = await bridge.chooseOpenPath()
+    if (choice.canceled || !choice.filePath) return
+    const res = await bridge.readFile({ filePath: choice.filePath })
+    if (!res.ok || res.content === undefined) { flash(`Open failed: ${res.error}`); return }
+    loadMarkdown(res.content, choice.filePath.split(/[\\/]/).pop() || choice.filePath, choice.filePath)
+  }
+
+  // Save: in Electron, overwrite the current file directly; the save dialog
+  // only appears on the first save of a new document ("Save As"). In a plain
+  // browser, fall back to a blob download.
+  const saveDocument = async () => {
     const md = getMarkdown()
+    const bridge = getBridge()
+    if (bridge?.chooseSavePath && bridge?.writeFile) {
+      let path = filePath
+      if (!path) {
+        const choice = await bridge.chooseSavePath({ docName })
+        if (choice.canceled || !choice.filePath) return
+        path = choice.filePath
+      }
+      const base64 = await blobToBase64(new Blob([md], { type: 'text/markdown' }))
+      const res = await bridge.writeFile({ filePath: path, base64 })
+      if (!res.ok) { flash(`Save failed: ${res.error}`); return }
+      setFilePath(path)
+      setDocName(path.split(/[\\/]/).pop() || path)
+      setDirty(false)
+      return
+    }
     const blob = new Blob([md], { type: 'text/markdown' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -254,7 +340,7 @@ export default function App() {
     if (!bridge?.onMenuAction) return
     return bridge.onMenuAction((action) => {
       if (action === 'new') newDocument()
-      else if (action === 'open') openFileRef.current?.click()
+      else if (action === 'open') openViaDialog()
       else if (action === 'save') saveDocument()
       else if (action === 'export') exportDocument()
       else if (action === 'print') printDocument()
@@ -267,6 +353,9 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         saveDocument()
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        toggleCodeView()
       }
     }
     window.addEventListener('keydown', handler)
@@ -278,7 +367,7 @@ export default function App() {
       <header className="app-header">
         <span className="app-title">Apertus Writer</span>
         <button className="tb-btn" onClick={newDocument}>New</button>
-        <button className="tb-btn" onClick={() => openFileRef.current?.click()}>Open</button>
+        <button className="tb-btn" onClick={openViaDialog}>Open</button>
         <input ref={openFileRef} type="file" accept=".md,.markdown,.txt" hidden
           onChange={(e) => e.target.files?.[0] && openDocument(e.target.files[0])} />
         <button className="tb-btn" onClick={saveDocument}>Save{dirty ? ' •' : ''}</button>
@@ -303,7 +392,8 @@ export default function App() {
         <button className="tb-btn" title="Settings" onClick={() => setShowSettings(true)}>⚙️</button>
       </header>
 
-      <Toolbar editor={editor} onInsertImage={() => imageFileRef.current?.click()} />
+      <Toolbar editor={editor} onInsertImage={() => imageFileRef.current?.click()}
+        codeView={codeView} onToggleCodeView={toggleCodeView} />
       <input ref={imageFileRef} type="file" accept="image/*" hidden
         onChange={(e) => e.target.files?.[0] && insertImage(e.target.files[0])} />
 
@@ -311,13 +401,23 @@ export default function App() {
         <div className="status-bar">{exportMsg ?? aiError}</div>
       )}
 
-      {showContext && <ContextPanel onClose={() => setShowContext(false)} />}
+      {showContext && <ContextPanel settings={settings} onClose={() => setShowContext(false)} />}
 
       <div className="app-body">
         <main className="doc-scroll">
-          <div className="doc-page">
-            <EditorContent editor={editor} />
-          </div>
+          {codeView ? (
+            <textarea
+              className="doc-codeview"
+              value={codeText}
+              onChange={(e) => { setCodeText(e.target.value); setDirty(true) }}
+              spellCheck={settings.spellcheckEnabled}
+              placeholder="# Raw markdown…"
+            />
+          ) : (
+            <div className="doc-page">
+              <EditorContent editor={editor} />
+            </div>
+          )}
         </main>
 
         {showStyles && (

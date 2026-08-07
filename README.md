@@ -7,16 +7,26 @@ Unlike traditional markdown editors, there is no code/preview split — you edit
 ## Features
 
 - **Direct rich-text editing** of markdown documents (TipTap/ProseMirror), with markdown round-trip via `marked` + `turndown`
+- **Code view switcher**: toggle to an editable raw-markdown view with **Ctrl-Shift-M** or the **</> Code** toolbar button; switching back re-parses into the WYSIWYG editor
 - **Toolbar ribbon**: bold, italic, strikethrough, inline code, code blocks, headings 1–4, bullet/numbered lists, blockquotes, tables, images, horizontal rules, undo/redo
 - **CSS style themes**: edit fonts, colors, sizes, and page width live; save/load themes as standalone `.css` files
-- **AI autocomplete**: pause while typing and a ghost-text suggestion appears (grey italic); press **Ctrl-Space** to accept, **Esc** to dismiss. Defaults to `apertus-v1.1-4b` on a local LM Studio Server
-- **Chat sidebar**: talk about your document with an AI model (defaults to `apertus-v1.1-4b-instruct` on LM Studio). The current document is included as context by default (toggleable); you can also attach other `.md`/`.txt` files or paste URLs as extra context
+- **AI autocomplete**: press **Ctrl-Space** and a ghost-text suggestion appears (grey italic); **Tab** accepts it, any other key or action dismisses it. Defaults to `apertus-v1.1-4b` on a local LM Studio Server. Reference documents attached via 📎 Context (files or URLs) are wrapped in `<s>…</s>` document-boundary tokens and prepended to the prompt, so suggestions match their style and content. Long references are automatically compressed by the instruct model in the background (⏳ chip while summarizing) to fit the context window; if the prompt still overflows, autocomplete retries once without references
+- **Chat sidebar**: talk about your document with an AI model (defaults to `apertus-v1.1-4b-instruct` on LM Studio). The current document is included as context by default (toggleable); you can also attach other files (`.md`, `.txt`, `.pdf`, `.docx`, `.odt` — text is extracted from the binary formats) or paste URLs as extra context
 - **Any OpenAI-compatible endpoint** works for both features (LM Studio, Public AI, OpenAI, Ollama…) — configure base URL, model, and API key in ⚙️ Settings, with a built-in "Test connection" button
 - **Export to Word (.docx), OpenDocument (.odt), and PDF** with the active CSS theme applied — docx/odt are generated in-app with the theme mapped to native styles (fonts, colors, sizes, code shading, table styling), no external tools required; PDF is rendered from the themed HTML directly
 
 ## Getting started
 
-**Desktop app (recommended)** — runs in Electron, which makes API requests outside the browser sandbox, so **CORS never applies** and any endpoint works (local servers, third-party hosted APIs):
+**Install as a Windows app (recommended for regular use)** — builds an NSIS installer that installs to your user profile (no admin rights needed) and adds Start Menu and Desktop shortcuts, so you can launch *Apertus Writer* like any other app:
+
+```bash
+npm install
+npm run dist   # builds the web app and packages it → release\Apertus Writer Setup <version>.exe
+```
+
+Run the generated `.exe` from the `release` folder to install. To update later, bump `version` in `package.json`, re-run `npm run dist`, and install again — it replaces the previous version.
+
+**Development with hot-reload** — runs in Electron, which makes API requests outside the browser sandbox, so **CORS never applies** and any endpoint works (local servers, third-party hosted APIs):
 
 ```bash
 npm install
@@ -43,8 +53,10 @@ To use a different provider (e.g. the [Public AI Inference Utility](https://plat
 |---|---|
 | Open document | "Open" button → pick a `.md` file |
 | Save document | Ctrl-S or "Save" (downloads the `.md` file) |
-| Accept autocomplete | Ctrl-Space |
-| Dismiss suggestion | Esc |
+| Request autocomplete | Ctrl-Space |
+| Accept suggestion | Tab |
+| Dismiss suggestion | Esc (or just keep typing) |
+| Toggle raw markdown code view | Ctrl-Shift-M or "</> Code" in the toolbar |
 | Style theme | 🎨 Styles panel → tweak values → "Save theme .css" |
 | Chat | 💬 Chat sidebar → pick local or cloud model |
 

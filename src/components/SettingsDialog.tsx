@@ -75,11 +75,6 @@ export default function SettingsDialog({ settings, onSave, onClose }: Props) {
           <fieldset className="endpoint-fields">
             <legend>General</legend>
             <label className="row">
-              <input type="checkbox" checked={s.autocompleteEnabled}
-                onChange={(e) => setS({ ...s, autocompleteEnabled: e.target.checked })} />
-              Enable autocomplete (takes effect on reload)
-            </label>
-            <label className="row">
               <input type="checkbox" checked={s.spellcheckEnabled}
                 onChange={(e) => setS({ ...s, spellcheckEnabled: e.target.checked })} />
               Enable spell check

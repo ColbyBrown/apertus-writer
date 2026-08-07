@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('aiBridge', {
   request: (args) => ipcRenderer.invoke('ai-request', args),
+  chooseOpenPath: () => ipcRenderer.invoke('choose-open-path'),
+  readFile: (args) => ipcRenderer.invoke('read-file', args),
+  chooseSavePath: (args) => ipcRenderer.invoke('choose-save-path', args),
   chooseExportPath: (args) => ipcRenderer.invoke('choose-export-path', args),
   writeFile: (args) => ipcRenderer.invoke('write-file', args),
   exportPdfTo: (args) => ipcRenderer.invoke('export-pdf-to', args),

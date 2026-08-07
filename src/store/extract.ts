@@ -1,0 +1,72 @@
+// Text extraction from binary document formats (PDF / DOCX / ODT) for use as
+// reference context. Extraction is text-only: paragraph structure is preserved
+// as newlines, but formatting, images, and tables are flattened.
+import JSZip from 'jszip'
+
+const MAX_CHARS = 20000
+
+function normalize(text: string): string {
+  return text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_CHARS)
+}
+
+/** DOCX: zip of XML; the body text lives in word/document.xml as <w:t> runs. */
+export async function extractDocx(buf: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buf)
+  const file = zip.file('word/document.xml')
+  if (!file) throw new Error('Not a valid DOCX (word/document.xml missing)')
+  const doc = new DOMParser().parseFromString(await file.async('text'), 'application/xml')
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+  const paragraphs = Array.from(doc.getElementsByTagNameNS(W, 'p')).map((p) =>
+    Array.from(p.getElementsByTagNameNS(W, 't'))
+      .map((t) => t.textContent ?? '')
+      .join(''),
+  )
+  const text = normalize(paragraphs.join('\n'))
+  if (!text) throw new Error('No extractable text found in DOCX')
+  return text
+}
+
+/** ODT: zip of XML; the body text lives in content.xml as text:p / text:h. */
+export async function extractOdt(buf: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buf)
+  const file = zip.file('content.xml')
+  if (!file) throw new Error('Not a valid ODT (content.xml missing)')
+  const doc = new DOMParser().parseFromString(await file.async('text'), 'application/xml')
+  const TEXT = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0'
+  const blocks = [
+    ...Array.from(doc.getElementsByTagNameNS(TEXT, 'p')),
+    ...Array.from(doc.getElementsByTagNameNS(TEXT, 'h')),
+  ]
+  const text = normalize(blocks.map((b) => b.textContent ?? '').join('\n'))
+  if (!text) throw new Error('No extractable text found in ODT')
+  return text
+}
+
+/**
+ * PDF: parsed with pdf.js, lazy-loaded so the (~400 KB) library is only
+ * fetched when a PDF is actually attached. Scanned PDFs without a text layer
+ * yield nothing and are reported as an error.
+ */
+export async function extractPdf(buf: ArrayBuffer): Promise<string> {
+  const [pdfjs, workerUrl] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+  ])
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl.default
+  const pdf = await pdfjs.getDocument({ data: buf }).promise
+  const pages: string[] = []
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    pages.push(
+      content.items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' '),
+    )
+  }
+  const text = normalize(pages.join('\n\n'))
+  if (!text) {
+    throw new Error('No extractable text found (scanned/image-only PDFs are not supported)')
+  }
+  return text
+}

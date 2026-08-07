@@ -91,6 +91,24 @@ body {
   float: left; height: 0; pointer-events: none; opacity: 0.4;
 }
 
+/* Raw markdown code view */
+.doc-codeview {
+  flex: 1;
+  width: 100%;
+  min-height: 100%;
+  padding: 28px 32px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: #fff;
+  font-family: var(--doc-code-font, 'Cascadia Code', Consolas, monospace);
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1f2328;
+  white-space: pre-wrap;
+  tab-size: 2;
+}
+
 /* Ghost autocomplete suggestion */
 .ghost-suggestion {
   opacity: 0.4;

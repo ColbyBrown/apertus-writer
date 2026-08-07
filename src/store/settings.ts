@@ -3,7 +3,6 @@ import type { EndpointConfig } from '../api/openai'
 export interface Settings {
   autocomplete: EndpointConfig
   chat: EndpointConfig
-  autocompleteEnabled: boolean
   spellcheckEnabled: boolean
 }
 
@@ -20,7 +19,6 @@ export const DEFAULT_SETTINGS: Settings = {
     apiKey: '',
     model: 'apertus-v1.1-4b-instruct',
   },
-  autocompleteEnabled: true,
   spellcheckEnabled: true,
 }
 
