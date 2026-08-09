@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -24,11 +24,25 @@ const WELCOME_MD = `# Welcome to Apertus Writer
 
 This is a **WYSIWYG markdown editor** — you edit the rendered document directly, and it saves as markdown.
 
-- Use the toolbar above to format text
-- Press **Ctrl-Space** to request an AI autocomplete suggestion, **Tab** to accept it
-- Open the **chat sidebar** to talk with AI about your document
+## AI autocomplete (Ctrl-Space)
 
-Try typing a sentence and pressing **Ctrl-Space** — the AI will suggest a continuation.
+Press **Ctrl-Space** and a ghost-text suggestion appears; press **Tab** to accept it, or keep typing to dismiss.
+
+To use it, you need a running **OpenAI-compatible server** with the base model *apertus-v1.1-4b* loaded — e.g. LM Studio on http://localhost:1234/v1, Ollama, or any provider.
+
+Set the base URL and model in ⚙️ **Settings** → *Autocomplete*, then press **Test connection**. The default points at a local LM Studio server.
+
+## Chat sidebar
+
+Open the **💬 Chat sidebar** to talk with your document. It uses the instruct model *apertus-v1.1-4b-instruct* and can point at any endpoint (local or cloud).
+
+Configure it in ⚙️ **Settings** → *Chat*, with its own base URL, model, and API key.
+
+## Any endpoint works
+
+Both features accept any OpenAI-compatible endpoint. If you use a cloud provider, set the API key in Settings too. If the server is on a different machine, use its URL here.
+
+> In the installed app, whatever you type here autosaves and returns on relaunch — so treat this page as a scratch pad, or open a file with the **Open** button.
 `
 
 export default function App() {
@@ -54,6 +68,42 @@ export default function App() {
   settingsRef.current = settings
 
   const [aiError, setAiError] = useState<string | null>(null)
+
+  // --- Session persistence ---------------------------------------------------
+  // The working document (markdown + name + on-disk path) is autosaved to a
+  // session file ~1s after the last edit and restored on startup, so the app
+  // reopens whatever you were working on instead of the welcome page. Lives in
+  // the Electron main process (plain-browser sessions are unaffected).
+  // Refs mirror the state values the debounced save needs at fire time —
+  // closure-captured values would go stale.
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  const docNameRef = useRef(docName)
+  docNameRef.current = docName
+  const filePathRef = useRef(filePath)
+  filePathRef.current = filePath
+  const codeViewRef = useRef(codeView)
+  codeViewRef.current = codeView
+  const codeTextRef = useRef(codeText)
+  codeTextRef.current = codeText
+  const editorRef = useRef<Editor | null>(null)
+  const sessionTimerRef = useRef<number | null>(null)
+
+  const saveSessionNow = useCallback(() => {
+    const bridge = getBridge()
+    const ed = editorRef.current
+    if (!bridge?.sessionSave || !ed) return
+    const content = codeViewRef.current ? codeTextRef.current : htmlToMarkdown(ed.getHTML())
+    void bridge.sessionSave({ docName: docNameRef.current, filePath: filePathRef.current, content })
+  }, [])
+
+  const scheduleSessionSave = useCallback(() => {
+    if (sessionTimerRef.current != null) window.clearTimeout(sessionTimerRef.current)
+    sessionTimerRef.current = window.setTimeout(() => {
+      sessionTimerRef.current = null
+      saveSessionNow()
+    }, 1000)
+  }, [saveSessionNow])
 
   // Build the completions prompt. Reference documents are wrapped in <s>…</s>
   // — the document boundary token used in Apertus pretraining — so the base
@@ -116,11 +166,36 @@ export default function App() {
       Autocomplete.configure({ fetchSuggestion }),
     ],
     content: markdownToHtml(WELCOME_MD),
-    onUpdate: () => setDirty(true),
+    onUpdate: () => { setDirty(true); scheduleSessionSave() },
     editorProps: {
       attributes: { spellcheck: settings.spellcheckEnabled ? 'true' : 'false' },
     },
   })
+
+  editorRef.current = editor
+
+  // Restore the previous working document on startup. Runs once, after the
+  // editor exists; the Electron bridge is absent in a plain browser, which
+  // then keeps the welcome document.
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (!editor || restoredRef.current) return
+    restoredRef.current = true
+    const bridge = getBridge()
+    if (!bridge?.sessionLoad) return
+    bridge.sessionLoad().then((res) => {
+      if (!res.ok || !res.session) return
+      // Use the live editor instance rather than the closure capture: in dev
+      // StrictMode the initial editor is destroyed and recreated before this
+      // async callback runs.
+      const ed = editorRef.current
+      if (!ed) return
+      ed.commands.setContent(markdownToHtml(res.session.content))
+      setDocName(res.session.docName)
+      setFilePath(res.session.filePath)
+      setDirty(false)
+    }).catch(() => { /* no saved session */ })
+  }, [editor])
 
   // Live-toggle spellcheck when the setting changes
   useEffect(() => {
@@ -216,6 +291,9 @@ export default function App() {
       setFilePath(path)
       setDocName(path.split(/[\\/]/).pop() || path)
       setDirty(false)
+      // Persist the (possibly new) name/path even though the content didn't
+      // change in this save, so a restart restores the right file reference.
+      scheduleSessionSave()
       return
     }
     const blob = new Blob([md], { type: 'text/markdown' })
@@ -347,6 +425,23 @@ export default function App() {
     })
   })
 
+  // Warn before closing the window with unsaved (manual-save) changes, and
+  // flush any pending debounced autosave so the session file is fully up to
+  // date on exit. The browser/Electron native confirm dialog appears only
+  // when the document is dirty.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (sessionTimerRef.current != null) {
+        window.clearTimeout(sessionTimerRef.current)
+        sessionTimerRef.current = null
+        saveSessionNow()
+      }
+      if (dirtyRef.current) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [saveSessionNow])
+
   // Ctrl-S to save
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -409,7 +504,7 @@ export default function App() {
             <textarea
               className="doc-codeview"
               value={codeText}
-              onChange={(e) => { setCodeText(e.target.value); setDirty(true) }}
+              onChange={(e) => { setCodeText(e.target.value); setDirty(true); scheduleSessionSave() }}
               spellCheck={settings.spellcheckEnabled}
               placeholder="# Raw markdown…"
             />

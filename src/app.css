@@ -29,6 +29,7 @@ body {
   line-height: 1; white-space: nowrap;
 }
 .tb-btn:hover { background: rgba(0,0,0,0.07); }
+.tb-btn:disabled, .tb-select:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 .tb-btn.active { background: rgba(9,105,218,0.15); border-color: #0969da44; }
 .tb-btn.primary { background: #0969da; color: #fff; }
 .tb-btn.send { background: #0969da; color: #fff; }

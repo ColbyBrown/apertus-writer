@@ -121,6 +121,45 @@ function createWindow() {
   }
 }
 
+// Session restore: the working document (markdown + name/path) is persisted to
+// a JSON file in userData so the app can reopen it after a restart (e.g. after
+// the computer sleeps/wakes or the app is relaunched) instead of falling back
+// to the default welcome document.
+function sessionPath() {
+  return path.join(app.getPath('userData'), 'session.json')
+}
+
+// IPC: persist the current working document. → { ok, error? }
+// args: { docName, filePath, content }
+ipcMain.handle('session-save', async (_event, { docName, filePath, content }) => {
+  try {
+    const data = JSON.stringify({ docName, filePath, content })
+    fs.writeFileSync(sessionPath(), data, 'utf8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
+// IPC: read back the persisted session, if any. → { ok, session? }
+ipcMain.handle('session-load', async () => {
+  try {
+    const raw = fs.readFileSync(sessionPath(), 'utf8')
+    const session = JSON.parse(raw)
+    if (typeof session.content !== 'string') return { ok: true, session: null }
+    return {
+      ok: true,
+      session: {
+        docName: typeof session.docName === 'string' ? session.docName : 'untitled.md',
+        filePath: typeof session.filePath === 'string' || session.filePath === null ? session.filePath : null,
+        content: session.content,
+      },
+    }
+  } catch {
+    return { ok: true, session: null }
+  }
+})
+
 // IPC: perform an HTTP request on behalf of the renderer.
 // args: { url, method, headers, body } → { ok, status, statusText, body }
 ipcMain.handle('ai-request', async (_event, { url, method, headers, body }) => {

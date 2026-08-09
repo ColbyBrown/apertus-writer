@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('aiBridge', {
   writeFile: (args) => ipcRenderer.invoke('write-file', args),
   exportPdfTo: (args) => ipcRenderer.invoke('export-pdf-to', args),
   printDocument: (args) => ipcRenderer.invoke('print-document', args),
+  sessionSave: (args) => ipcRenderer.invoke('session-save', args),
+  sessionLoad: () => ipcRenderer.invoke('session-load'),
   onMenuAction: (callback) => {
     const listener = (_event, action) => callback(action)
     ipcRenderer.on('menu-action', listener)

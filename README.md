@@ -14,6 +14,7 @@ Unlike traditional markdown editors, there is no code/preview split — you edit
 - **Chat sidebar**: talk about your document with an AI model (defaults to `apertus-v1.1-4b-instruct` on LM Studio). The current document is included as context by default (toggleable); you can also attach other files (`.md`, `.txt`, `.pdf`, `.docx`, `.odt` — text is extracted from the binary formats) or paste URLs as extra context
 - **Any OpenAI-compatible endpoint** works for both features (LM Studio, Public AI, OpenAI, Ollama…) — configure base URL, model, and API key in ⚙️ Settings, with a built-in "Test connection" button
 - **Export to Word (.docx), OpenDocument (.odt), and PDF** with the active CSS theme applied — docx/odt are generated in-app with the theme mapped to native styles (fonts, colors, sizes, code shading, table styling), no external tools required; PDF is rendered from the themed HTML directly
+- **Session restore** (Electron): the working document is autosaved ~1 second after your last edit and restored on relaunch, so the app reopens whatever you were working on — even after a restart or power cycle — instead of the welcome page. Closing with unsaved changes prompts the native "discard changes?" confirmation first
 
 ## Getting started
 
@@ -40,6 +41,8 @@ npm run dev   # then open http://localhost:5173
 ```
 
 ### Prerequisites
+
+On first launch the app opens a built-in quick-start page with the setup steps below, so you can follow along without this README.
 
 By default the app expects **LM Studio** with the local server running on port `1234` and these models loaded:
 - `apertus-v1.1-4b` (autocomplete, base model — uses the raw `/completions` endpoint)
