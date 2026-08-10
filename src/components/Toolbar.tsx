@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/react'
+import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   editor: Editor | null
@@ -8,8 +9,31 @@ interface Props {
 }
 
 export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeView }: Props) {
+  const [showTableMenu, setShowTableMenu] = useState(false)
+  const tableMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close the table dropdown on click-outside and Escape
+  useEffect(() => {
+    if (!showTableMenu) return
+    const onDown = (e: MouseEvent) => {
+      if (!tableMenuRef.current?.contains(e.target as Node)) setShowTableMenu(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowTableMenu(false) }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [showTableMenu])
+
   if (!editor) return null
   const btn = (active: boolean) => 'tb-btn' + (active ? ' active' : '')
+  // Run a table command then close the menu — keeps dropdown UX simple.
+  const runTable = (fn: (chain: ReturnType<Editor['chain']>) => unknown) => {
+    fn(editor.chain().focus())
+    setShowTableMenu(false)
+  }
 
   return (
     <div className="toolbar">
@@ -60,11 +84,38 @@ export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeV
       <button className="tb-btn" title="Insert table" disabled={codeView}
         onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>▦ Table</button>
       {editor.isActive('table') && (
-        <>
-          <button className="tb-btn" disabled={codeView} onClick={() => editor.chain().focus().addColumnAfter().run()}>+Col</button>
-          <button className="tb-btn" disabled={codeView} onClick={() => editor.chain().focus().addRowAfter().run()}>+Row</button>
-          <button className="tb-btn" disabled={codeView} onClick={() => editor.chain().focus().deleteTable().run()}>✕ Table</button>
-        </>
+        <span className="table-wrap" ref={tableMenuRef}>
+          <button className="tb-btn" title="Table actions" disabled={codeView}
+            onClick={() => setShowTableMenu((v) => !v)}>Table ▾</button>
+          {showTableMenu && (
+            <div className="table-dropdown">
+              <div className="table-menu-section">Insert</div>
+              <button className="tb-btn" disabled={codeView || !editor.can().addRowBefore()}
+                onClick={() => runTable((c) => c.addRowBefore().run())}>↥ Row above</button>
+              <button className="tb-btn" disabled={codeView || !editor.can().addRowAfter()}
+                onClick={() => runTable((c) => c.addRowAfter().run())}>↧ Row below</button>
+              <button className="tb-btn" disabled={codeView || !editor.can().addColumnBefore()}
+                onClick={() => runTable((c) => c.addColumnBefore().run())}>⇤ Column left</button>
+              <button className="tb-btn" disabled={codeView || !editor.can().addColumnAfter()}
+                onClick={() => runTable((c) => c.addColumnAfter().run())}>⇥ Column right</button>
+              <div className="table-menu-sep" />
+              <div className="table-menu-section">Delete</div>
+              <button className="tb-btn" disabled={codeView || !editor.can().deleteRow()}
+                onClick={() => runTable((c) => c.deleteRow().run())}>✕ Row</button>
+              <button className="tb-btn" disabled={codeView || !editor.can().deleteColumn()}
+                onClick={() => runTable((c) => c.deleteColumn().run())}>✕ Column</button>
+              <button className="tb-btn" disabled={codeView} onClick={() => runTable((c) => c.deleteTable().run())}>✕ Table</button>
+              <div className="table-menu-sep" />
+              <div className="table-menu-section">Cell</div>
+              <button className="tb-btn" disabled={codeView || !editor.can().mergeCells()}
+                onClick={() => runTable((c) => c.mergeCells().run())}>⌗ Merge cells</button>
+              <button className="tb-btn" disabled={codeView || !editor.can().splitCell()}
+                onClick={() => runTable((c) => c.splitCell().run())}>⌘ Split cell</button>
+              <button className="tb-btn" disabled={codeView} onClick={() => runTable((c) => c.toggleHeaderRow().run())}>
+                Header row</button>
+            </div>
+          )}
+        </span>
       )}
       <button className="tb-btn" title="Insert image" disabled={codeView} onClick={onInsertImage}>🖼 Image</button>
       <button className="tb-btn" title="Horizontal rule" disabled={codeView}
