@@ -26,7 +26,7 @@ This is a **WYSIWYG markdown editor** — you edit the rendered document directl
 
 ## AI autocomplete (Ctrl-Space)
 
-Press **Ctrl-Space** and a ghost-text suggestion appears; press **Tab** to accept it, or keep typing to dismiss.
+Press **Ctrl-Space** and a ghost-text suggestion appears; press **Tab** to accept it, or keep typing to dismiss. Turn on the toolbar's **✨ Auto** toggle to get suggestions automatically whenever you pause typing.
 
 To use it, you need a running **OpenAI-compatible server** with the base model *apertus-v1.1-4b* loaded — e.g. LM Studio on http://localhost:1234/v1, Ollama, or any provider.
 
@@ -163,7 +163,10 @@ export default function App() {
       TableRow,
       TableHeader,
       TableCell,
-      Autocomplete.configure({ fetchSuggestion }),
+      Autocomplete.configure({
+        fetchSuggestion,
+        shouldAutoSuggest: () => settingsRef.current.autoSuggestEnabled,
+      }),
     ],
     content: markdownToHtml(WELCOME_MD),
     onUpdate: () => { setDirty(true); scheduleSessionSave() },
@@ -488,7 +491,13 @@ export default function App() {
       </header>
 
       <Toolbar editor={editor} onInsertImage={() => imageFileRef.current?.click()}
-        codeView={codeView} onToggleCodeView={toggleCodeView} />
+        codeView={codeView} onToggleCodeView={toggleCodeView}
+        autoSuggest={settings.autoSuggestEnabled}
+        onToggleAutoSuggest={() => {
+          const next = { ...settingsRef.current, autoSuggestEnabled: !settingsRef.current.autoSuggestEnabled }
+          setSettings(next)
+          saveSettings(next)
+        }} />
       <input ref={imageFileRef} type="file" accept="image/*" hidden
         onChange={(e) => e.target.files?.[0] && insertImage(e.target.files[0])} />
 

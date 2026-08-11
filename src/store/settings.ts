@@ -4,6 +4,7 @@ export interface Settings {
   autocomplete: EndpointConfig
   chat: EndpointConfig
   spellcheckEnabled: boolean
+  autoSuggestEnabled: boolean
 }
 
 // Defaults point at a local LM Studio server. Any OpenAI-compatible endpoint
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
     model: 'apertus-v1.1-4b-instruct',
   },
   spellcheckEnabled: true,
+  autoSuggestEnabled: false,
 }
 
 const KEY = 'apertus-writer-settings-v6'

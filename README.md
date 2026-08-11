@@ -10,7 +10,7 @@ Unlike traditional markdown editors, there is no code/preview split — you edit
 - **Code view switcher**: toggle to an editable raw-markdown view with **Ctrl-Shift-M** or the **</> Code** toolbar button; switching back re-parses into the WYSIWYG editor
 - **Toolbar ribbon**: bold, italic, strikethrough, inline code, code blocks, headings 1–4, bullet/numbered lists, blockquotes, tables, images, horizontal rules, undo/redo
 - **CSS style themes**: edit fonts, colors, sizes, and page width live; save/load themes as standalone `.css` files
-- **AI autocomplete**: press **Ctrl-Space** and a ghost-text suggestion appears (grey italic); **Tab** accepts it, any other key or action dismisses it. Defaults to `apertus-v1.1-4b` on a local LM Studio Server. Reference documents attached via 📎 Context (files or URLs) are wrapped in `<s>…</s>` document-boundary tokens and prepended to the prompt, so suggestions match their style and content. Long references are automatically compressed by the instruct model in the background (⏳ chip while summarizing) to fit the context window; if the prompt still overflows, autocomplete retries once without references
+- **AI autocomplete**: press **Ctrl-Space** and a ghost-text suggestion appears (grey italic); **Tab** accepts it, any other key or action dismisses it — or enable the toolbar's **✨ Auto** toggle to get suggestions automatically after a short typing pause (persists across sessions). Defaults to `apertus-v1.1-4b` on a local LM Studio Server. Reference documents attached via 📎 Context (files or URLs) are wrapped in `<s>…</s>` document-boundary tokens and prepended to the prompt, so suggestions match their style and content. Long references are automatically compressed by the instruct model in the background (⏳ chip while summarizing) to fit the context window; if the prompt still overflows, autocomplete retries once without references
 - **Chat sidebar**: talk about your document with an AI model (defaults to `apertus-v1.1-4b-instruct` on LM Studio). The current document is included as context by default (toggleable); you can also attach other files (`.md`, `.txt`, `.pdf`, `.docx`, `.odt` — text is extracted from the binary formats) or paste URLs as extra context
 - **Any OpenAI-compatible endpoint** works for both features (LM Studio, Public AI, OpenAI, Ollama…) — configure base URL, model, and API key in ⚙️ Settings, with a built-in "Test connection" button
 - **Export to Word (.docx), OpenDocument (.odt), and PDF** with the active CSS theme applied — docx/odt are generated in-app with the theme mapped to native styles (fonts, colors, sizes, code shading, table styling), no external tools required; PDF is rendered from the themed HTML directly
@@ -56,7 +56,7 @@ To use a different provider (e.g. the [Public AI Inference Utility](https://plat
 |---|---|
 | Open document | "Open" button → pick a `.md` file |
 | Save document | Ctrl-S or "Save" (downloads the `.md` file) |
-| Request autocomplete | Ctrl-Space |
+| Request autocomplete | Ctrl-Space (or enable "✨ Auto" in the toolbar for suggestions on typing pause) |
 | Accept suggestion | Tab |
 | Dismiss suggestion | Esc (or just keep typing) |
 | Toggle raw markdown code view | Ctrl-Shift-M or "</> Code" in the toolbar |

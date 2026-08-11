@@ -6,9 +6,11 @@ interface Props {
   onInsertImage: () => void
   codeView: boolean
   onToggleCodeView: () => void
+  autoSuggest: boolean
+  onToggleAutoSuggest: () => void
 }
 
-export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeView }: Props) {
+export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeView, autoSuggest, onToggleAutoSuggest }: Props) {
   const [showTableMenu, setShowTableMenu] = useState(false)
   const tableMenuRef = useRef<HTMLDivElement>(null)
 
@@ -83,11 +85,12 @@ export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeV
       <span className="tb-sep" />
       <button className="tb-btn" title="Insert table" disabled={codeView}
         onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>▦ Table</button>
-      {editor.isActive('table') && (
-        <span className="table-wrap" ref={tableMenuRef}>
-          <button className="tb-btn" title="Table actions" disabled={codeView}
-            onClick={() => setShowTableMenu((v) => !v)}>Table ▾</button>
-          {showTableMenu && (
+      {/* Always present (greyed out outside a table) so the toolbar doesn't
+          shift around as the cursor moves in and out of tables. */}
+      <span className="table-wrap" ref={tableMenuRef}>
+        <button className="tb-btn" title="Edit table" disabled={codeView || !editor.isActive('table')}
+          onClick={() => setShowTableMenu((v) => !v)}>Edit ▾</button>
+          {showTableMenu && editor.isActive('table') && (
             <div className="table-dropdown">
               <div className="table-menu-section">Insert</div>
               <button className="tb-btn" disabled={codeView || !editor.can().addRowBefore()}
@@ -115,8 +118,7 @@ export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeV
                 Header row</button>
             </div>
           )}
-        </span>
-      )}
+      </span>
       <button className="tb-btn" title="Insert image" disabled={codeView} onClick={onInsertImage}>🖼 Image</button>
       <button className="tb-btn" title="Horizontal rule" disabled={codeView}
         onClick={() => editor.chain().focus().setHorizontalRule().run()}>―</button>
@@ -126,6 +128,8 @@ export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeV
       <button className="tb-btn" title="Redo" disabled={codeView} onClick={() => editor.chain().focus().redo().run()}>↷</button>
 
       <span className="tb-sep" />
+      <button className={btn(autoSuggest)} title="Auto-suggest on typing pause (AI)"
+        disabled={codeView} onClick={onToggleAutoSuggest}>✨ Auto</button>
       <button className={btn(codeView)} title="Toggle raw markdown code view (Ctrl+Shift+M)"
         onClick={onToggleCodeView}>{'</> Code'}</button>
     </div>
