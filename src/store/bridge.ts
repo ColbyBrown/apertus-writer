@@ -14,7 +14,7 @@ export interface Bridge {
   printDocument(args: { html: string; css: string }): Promise<{ ok: boolean; error?: string }>
   sessionSave(args: { docName: string; filePath: string | null; content: string }): Promise<{ ok: boolean; error?: string }>
   sessionLoad(): Promise<{ ok: boolean; session?: { docName: string; filePath: string | null; content: string } | null }>
-  onMenuAction(callback: (action: 'new' | 'open' | 'save' | 'export' | 'print') => void): () => void
+  onMenuAction(callback: (action: 'new' | 'open' | 'save' | 'saveAs' | 'export' | 'print') => void): () => void
 }
 
 export function getBridge(): Bridge | undefined {

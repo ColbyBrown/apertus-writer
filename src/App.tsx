@@ -9,6 +9,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import Toolbar from './components/Toolbar'
+import ConfirmDialog from './components/ConfirmDialog'
 import StylePanel, { DEFAULT_THEME, themeToCss, cssToTheme, type ThemeVars } from './components/StylePanel'
 import ChatSidebar from './components/ChatSidebar'
 import SettingsDialog from './components/SettingsDialog'
@@ -238,10 +239,20 @@ export default function App() {
   }, [codeView, codeText, editor, getMarkdown])
 
   // File operations
+  const [confirmNew, setConfirmNew] = useState(false)
+
+  // Replacing the current document with an empty one; when there are unsaved
+  // changes this is gated behind an in-app confirm instead of window.confirm —
+  // the synchronous native modal steals focus and leaves the editor unable to
+  // receive input afterwards.
   const newDocument = () => {
-    if (dirty && !window.confirm('Discard unsaved changes and start a new document?')) return
-    editor?.commands.setContent('')
-    editor?.commands.focus()
+    if (dirty) { setConfirmNew(true); return }
+    startNewDocument()
+  }
+
+  const startNewDocument = () => {
+    setConfirmNew(false)
+    editor?.chain().setContent('').focus('start').run()
     setDocName('untitled.md')
     setFilePath(null)
     setDirty(false)
@@ -278,12 +289,12 @@ export default function App() {
   // Save: in Electron, overwrite the current file directly; the save dialog
   // only appears on the first save of a new document ("Save As"). In a plain
   // browser, fall back to a blob download.
-  const saveDocument = async () => {
+  const saveDocument = async (forceDialog = false) => {
     const md = getMarkdown()
     const bridge = getBridge()
     if (bridge?.chooseSavePath && bridge?.writeFile) {
       let path = filePath
-      if (!path) {
+      if (!path || forceDialog) {
         const choice = await bridge.chooseSavePath({ docName })
         if (choice.canceled || !choice.filePath) return
         path = choice.filePath
@@ -423,6 +434,7 @@ export default function App() {
       if (action === 'new') newDocument()
       else if (action === 'open') openViaDialog()
       else if (action === 'save') saveDocument()
+      else if (action === 'saveAs') saveDocument(true)
       else if (action === 'export') exportDocument()
       else if (action === 'print') printDocument()
     })
@@ -468,7 +480,7 @@ export default function App() {
         <button className="tb-btn" onClick={openViaDialog}>Open</button>
         <input ref={openFileRef} type="file" accept=".md,.markdown,.txt" hidden
           onChange={(e) => e.target.files?.[0] && openDocument(e.target.files[0])} />
-        <button className="tb-btn" onClick={saveDocument}>Save{dirty ? ' •' : ''}</button>
+        <button className="tb-btn" onClick={() => saveDocument()}>Save{dirty ? ' •' : ''}</button>
         <span className="export-wrap">
           <button className="tb-btn" onClick={exportDocument}>Export…</button>
           {showExportMenu && (
@@ -553,6 +565,16 @@ export default function App() {
           </aside>
         )}
       </div>
+
+      {confirmNew && (
+        <ConfirmDialog
+          title="New document"
+          message="Discard unsaved changes and start a new document?"
+          confirmLabel="Discard & New"
+          onCancel={() => setConfirmNew(false)}
+          onConfirm={startNewDocument}
+        />
+      )}
 
       {showSettings && (
         <SettingsDialog

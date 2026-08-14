@@ -23,6 +23,7 @@ function buildMenu() {
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new') },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => sendMenuAction('open') },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
+        { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => sendMenuAction('saveAs') },
         { label: 'Export…', accelerator: 'CmdOrCtrl+E', click: () => sendMenuAction('export') },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => sendMenuAction('print') },
         { type: 'separator' },
