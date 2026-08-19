@@ -1,11 +1,8 @@
 // Dropdown panel for managing shared reference context (files + URLs) used by
 // both chat and autocomplete.
 import { useRef, useState } from 'react'
-import {
-  useContextItems, addContextItems, removeContextItem,
-  fetchUrlContext, fileToContext,
-} from '../store/context'
-import { summarizeInBackground } from '../store/summarize'
+import { useContextItems, removeContextItem } from '../store/context'
+import { attachFiles, attachUrl } from '../store/summarize'
 import type { Settings } from '../store/settings'
 
 export default function ContextPanel({ settings, onClose }: { settings: Settings; onClose: () => void }) {
@@ -14,28 +11,14 @@ export default function ContextPanel({ settings, onClose }: { settings: Settings
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const addFiles = async (files: FileList | null) => {
-    if (!files) return
-    const results = await Promise.allSettled(Array.from(files).map(fileToContext))
-    const added = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-    addContextItems(added)
-    summarizeInBackground(added, settings.chat)
-    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-    if (failed.length > 0) alert(`Could not read ${failed.length} file(s):\n${failed.map((f) => String(f.reason)).join('\n')}`)
-  }
+  const addFiles = (files: FileList | null) => attachFiles(files, settings.chat)
 
   const addUrl = async () => {
     const url = urlInput.trim()
     if (!url || busy) return
     setUrlInput('')
     setBusy(true)
-    try {
-      const item = await fetchUrlContext(url)
-      addContextItems([item])
-      summarizeInBackground([item], settings.chat)
-    } catch (err) {
-      alert(`Could not fetch ${url}: ${err}`)
-    }
+    await attachUrl(url, settings.chat)
     setBusy(false)
   }
 

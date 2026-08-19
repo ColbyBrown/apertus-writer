@@ -22,12 +22,11 @@ export function getBridge(): Bridge | undefined {
 }
 
 export async function blobToBase64(blob: Blob): Promise<string> {
-  const buf = await blob.arrayBuffer()
-  let binary = ''
-  const bytes = new Uint8Array(buf)
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-  }
-  return btoa(binary)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    // readAsDataURL yields `data:<type>;base64,<payload>` — strip the prefix.
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }

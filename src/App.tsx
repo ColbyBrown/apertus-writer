@@ -77,8 +77,6 @@ export default function App() {
   // the Electron main process (plain-browser sessions are unaffected).
   // Refs mirror the state values the debounced save needs at fire time —
   // closure-captured values would go stale.
-  const dirtyRef = useRef(dirty)
-  dirtyRef.current = dirty
   const docNameRef = useRef(docName)
   docNameRef.current = docName
   const filePathRef = useRef(filePath)
@@ -440,18 +438,19 @@ export default function App() {
     })
   })
 
-  // Warn before closing the window with unsaved (manual-save) changes, and
-  // flush any pending debounced autosave so the session file is fully up to
-  // date on exit. The browser/Electron native confirm dialog appears only
-  // when the document is dirty.
+  // Flush any pending debounced autosave on exit so the session file is fully
+  // up to date. No beforeunload prevention: dirty only means "not yet written
+  // to the .md file", and the working copy is already autosaved to session, so
+  // the window is allowed to close unconditionally. (A native
+  // will-prevent-unload dialog here is unreliable in Electron and can leave
+  // the window unable to close.)
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
+    const handler = () => {
       if (sessionTimerRef.current != null) {
         window.clearTimeout(sessionTimerRef.current)
         sessionTimerRef.current = null
         saveSessionNow()
       }
-      if (dirtyRef.current) e.preventDefault()
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)

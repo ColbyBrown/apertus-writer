@@ -6,19 +6,8 @@
 // go through fetch() directly and the endpoint must allow cross-origin
 // requests (LM Studio: enable CORS in server settings; Ollama: OLLAMA_ORIGINS).
 
-// Bridge exposed by electron/preload.cjs
-interface AiBridge {
-  request(args: {
-    url: string
-    method: string
-    headers: Record<string, string>
-    body: string
-  }): Promise<{ ok: boolean; status: number; statusText: string; body: string }>
-}
-
-function getBridge(): AiBridge | undefined {
-  return (window as unknown as { aiBridge?: AiBridge }).aiBridge
-}
+// Bridge exposed by electron/preload.cjs (typed in store/bridge.ts)
+import { getBridge } from '../store/bridge'
 
 export interface EndpointConfig {
   baseUrl: string // e.g. http://localhost:1234/v1 or https://api.publicai.co/v1

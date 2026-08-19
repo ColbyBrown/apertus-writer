@@ -208,7 +208,7 @@ body {
 .test-row { display: flex; align-items: center; gap: 8px; }
 .test-row .tb-btn { border-color: #d0d7de; }
 .test-result { font-size: 12px; }
-.chat-model-name { font-size: 12px; opacity: 0.6; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.chat-model-name { font-size: 12px; opacity: 0.6; flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; }
 .ai-error { color: #f0a35e; font-size: 12.5px; cursor: help; }
 .export-wrap { position: relative; display: inline-flex; }
 .export-dropdown {

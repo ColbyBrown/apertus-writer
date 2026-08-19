@@ -3,7 +3,10 @@
 // budget, so long references are replaced by dense summaries; chat keeps
 // using the full text.
 import { chat, type EndpointConfig } from '../api/openai'
-import { updateContextItem, type ExtraContext } from './context'
+import {
+  addContextItems, fetchUrlContext, fileToContext, updateContextItem,
+  type ExtraContext,
+} from './context'
 
 // Documents at or below this size are used verbatim — summarizing them would
 // only lose information.
@@ -34,6 +37,28 @@ export async function summarizeForAutocomplete(
     },
   ], 512)
   return result.slice(0, SUMMARY_TARGET_CHARS)
+}
+
+// Read, attach, and summarize newly-picked files (shared by chat sidebar and
+// the context panel).
+export async function attachFiles(files: FileList | null, cfg: EndpointConfig) {
+  if (!files) return
+  const results = await Promise.allSettled(Array.from(files).map(fileToContext))
+  const added = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  addContextItems(added)
+  summarizeInBackground(added, cfg)
+  const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (failed.length > 0) alert(`Could not read ${failed.length} file(s):\n${failed.map((f) => String(f.reason)).join('\n')}`)
+}
+
+export async function attachUrl(url: string, cfg: EndpointConfig) {
+  try {
+    const item = await fetchUrlContext(url)
+    addContextItems([item])
+    summarizeInBackground([item], cfg)
+  } catch (err) {
+    alert(`Could not fetch ${url}: ${err}`)
+  }
 }
 
 // Fire-and-forget: summarize each long item and patch it into the context

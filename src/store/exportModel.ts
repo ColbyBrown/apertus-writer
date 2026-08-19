@@ -82,11 +82,6 @@ function inlineOf(el: Element): InlineRun[] {
   return out
 }
 
-// table cell text
-function inlineOfCell(el: Element): InlineRun[] {
-  return inlineOf(el)
-}
-
 function cellText(el: Element): string {
   return el.textContent ?? ''
 }
@@ -124,7 +119,7 @@ export function htmlToBlocks(html: string): Block[] {
           ? Array.from(node.querySelectorAll('tbody tr'))
           : Array.from(node.querySelectorAll('tr')).slice(1)
         const rows = bodyRows.map((tr) =>
-          Array.from(tr.querySelectorAll('td,th')).map((td) => inlineOfCell(td)),
+          Array.from(tr.querySelectorAll('td,th')).map((td) => inlineOf(td)),
         ).filter((row) => row.length > 0)
         blocks.push({ kind: 'table', header, rows })
       } else if (tag === 'hr') {

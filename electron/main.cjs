@@ -277,22 +277,7 @@ function buildPrintableHtml(html, css) {
 // IPC: render themed HTML to a PDF file via printToPDF (preserves CSS exactly).
 // args: { filePath, html, css } → { ok, error? }
 ipcMain.handle('export-pdf-to', async (_event, { filePath, html, css }) => {
-  const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
-    ${css}
-    body { font-family: var(--doc-font); font-size: var(--doc-font-size);
-           color: var(--doc-text-color); background: var(--doc-bg);
-           max-width: var(--doc-max-width); margin: 0 auto; padding: 24px; line-height: 1.65; }
-    h1,h2,h3,h4 { color: var(--doc-heading-color); }
-    a { color: var(--doc-accent); }
-    code { font-family: var(--doc-code-font); background: var(--doc-code-bg); padding: 0.15em 0.35em; border-radius: 4px; }
-    pre { background: var(--doc-code-bg); padding: 12px 16px; border-radius: 8px; }
-    pre code { background: none; padding: 0; }
-    blockquote { border-left: 3px solid var(--doc-accent); margin-left: 0; padding-left: 16px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #d0d7de; padding: 6px 10px; }
-    th { background: var(--doc-code-bg); }
-    img { max-width: 100%; }
-  </style></head><body>${html}</body></html>`
+  const fullHtml = buildPrintableHtml(html, css)
   let win = null
   try {
     win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } })
