@@ -161,6 +161,84 @@ ipcMain.handle('session-load', async () => {
   }
 })
 
+// Chat history: one message thread per document, keyed by filePath (or
+// 'untitled:<docName>' for never-saved docs). Stored as a JSON map in userData
+// so a document's chat is restored when it is reopened. Mirrors session.json.
+function chatsPath() {
+  return path.join(app.getPath('userData'), 'chats.json')
+}
+
+function readChats() {
+  try {
+    return JSON.parse(fs.readFileSync(chatsPath(), 'utf8')) || {}
+  } catch {
+    return {}
+  }
+}
+
+// IPC: persist a document's chat thread. args: { key, messages } → { ok }
+ipcMain.handle('chat-save', async (_event, { key, messages }) => {
+  try {
+    const store = readChats()
+    if (Array.isArray(messages) && messages.length === 0) delete store[key]
+    else store[key] = messages
+    fs.writeFileSync(chatsPath(), JSON.stringify(store), 'utf8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
+// IPC: read a document's chat thread. args: { key } → { ok, messages }
+ipcMain.handle('chat-load', async (_event, { key }) => {
+  try {
+    const store = readChats()
+    const messages = Array.isArray(store[key]) ? store[key] : []
+    return { ok: true, messages }
+  } catch {
+    return { ok: true, messages: [] }
+  }
+})
+
+// Reference context (attached files/URLs): one set per document, keyed like
+// chat history. Stored as a JSON map in userData so a document's attachments
+// are restored when it is reopened. Mirrors chats.json.
+function contextPath() {
+  return path.join(app.getPath('userData'), 'context.json')
+}
+
+function readContextStore() {
+  try {
+    return JSON.parse(fs.readFileSync(contextPath(), 'utf8')) || {}
+  } catch {
+    return {}
+  }
+}
+
+// IPC: persist a document's reference context. args: { key, items } → { ok }
+ipcMain.handle('context-save', async (_event, { key, items }) => {
+  try {
+    const store = readContextStore()
+    if (Array.isArray(items) && items.length === 0) delete store[key]
+    else store[key] = items
+    fs.writeFileSync(contextPath(), JSON.stringify(store), 'utf8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
+// IPC: read a document's reference context. args: { key } → { ok, items }
+ipcMain.handle('context-load', async (_event, { key }) => {
+  try {
+    const store = readContextStore()
+    const items = Array.isArray(store[key]) ? store[key] : []
+    return { ok: true, items }
+  } catch {
+    return { ok: true, items: [] }
+  }
+})
+
 // IPC: perform an HTTP request on behalf of the renderer.
 // args: { url, method, headers, body } → { ok, status, statusText, body }
 ipcMain.handle('ai-request', async (_event, { url, method, headers, body }) => {

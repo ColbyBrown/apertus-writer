@@ -14,6 +14,10 @@ export interface Bridge {
   printDocument(args: { html: string; css: string }): Promise<{ ok: boolean; error?: string }>
   sessionSave(args: { docName: string; filePath: string | null; content: string }): Promise<{ ok: boolean; error?: string }>
   sessionLoad(): Promise<{ ok: boolean; session?: { docName: string; filePath: string | null; content: string } | null }>
+  chatSave(args: { key: string; messages: unknown[] }): Promise<{ ok: boolean; error?: string }>
+  chatLoad(args: { key: string }): Promise<{ ok: boolean; messages: unknown[] }>
+  contextSave(args: { key: string; items: unknown[] }): Promise<{ ok: boolean; error?: string }>
+  contextLoad(args: { key: string }): Promise<{ ok: boolean; items: unknown[] }>
   onMenuAction(callback: (action: 'new' | 'open' | 'save' | 'saveAs' | 'export' | 'print') => void): () => void
 }
 

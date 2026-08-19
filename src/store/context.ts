@@ -29,6 +29,12 @@ export function addContextItems(added: ExtraContext[]) {
   emit()
 }
 
+// Replace the whole list (used to restore a document's saved context).
+export function setContextItems(next: ExtraContext[]) {
+  items = [...next]
+  emit()
+}
+
 export function removeContextItem(index: number) {
   items = items.filter((_, i) => i !== index)
   emit()

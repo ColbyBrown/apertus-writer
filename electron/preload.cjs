@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('aiBridge', {
   printDocument: (args) => ipcRenderer.invoke('print-document', args),
   sessionSave: (args) => ipcRenderer.invoke('session-save', args),
   sessionLoad: () => ipcRenderer.invoke('session-load'),
+  chatSave: (args) => ipcRenderer.invoke('chat-save', args),
+  chatLoad: (args) => ipcRenderer.invoke('chat-load', args),
+  contextSave: (args) => ipcRenderer.invoke('context-save', args),
+  contextLoad: (args) => ipcRenderer.invoke('context-load', args),
   onMenuAction: (callback) => {
     const listener = (_event, action) => callback(action)
     ipcRenderer.on('menu-action', listener)

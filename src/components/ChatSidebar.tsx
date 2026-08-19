@@ -1,17 +1,19 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { marked } from 'marked'
 import { chat, type ChatMessage } from '../api/openai'
 import type { Settings } from '../store/settings'
 import { useContextItems, removeContextItem } from '../store/context'
 import { attachFiles, attachUrl } from '../store/summarize'
+import { loadChat, saveChat } from '../store/chatStorage'
 
 interface Props {
   settings: Settings
   getDocumentMarkdown: () => string
+  sessionKey: string
   onClose: () => void
 }
 
-export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: Props) {
+export default function ChatSidebar({ settings, getDocumentMarkdown, sessionKey, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -20,6 +22,30 @@ export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: 
   const [urlInput, setUrlInput] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Load this document's chat thread whenever the document identity changes.
+  // loadedRef gates the save effect below so the initial empty state can't
+  // clobber the stored history before the async load resolves.
+  const loadedRef = useRef(false)
+  useEffect(() => {
+    loadedRef.current = false
+    setMessages([])
+    let cancelled = false
+    void loadChat(sessionKey).then((m) => {
+      if (cancelled) return
+      loadedRef.current = true
+      setMessages(m)
+    })
+    return () => { cancelled = true }
+  }, [sessionKey])
+
+  // Persist the thread on every change, but only after the first load has
+  // completed for the current key (otherwise the mount-time [] overwrites the
+  // stored history before loadChat resolves).
+  useEffect(() => {
+    if (!loadedRef.current) return
+    saveChat(sessionKey, messages)
+  }, [sessionKey, messages])
 
   const scrollDown = () => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
 
@@ -67,6 +93,8 @@ export default function ChatSidebar({ settings, getDocumentMarkdown, onClose }: 
     <div className="chat-sidebar">
       <div className="panel-header">
         <strong>Chat</strong>
+        <button className="tb-btn" title="Start a new chat session (clears this document's thread)"
+          onClick={() => setMessages([])}>New session</button>
         <span className="chat-model-name" title={settings.chat.baseUrl}>{settings.chat.model}</span>
         <button className="tb-btn" onClick={onClose}>✕</button>
       </div>

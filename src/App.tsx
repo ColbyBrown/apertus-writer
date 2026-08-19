@@ -17,9 +17,10 @@ import { Autocomplete } from './components/Autocomplete'
 import { markdownToHtml, htmlToMarkdown } from './store/markdown'
 import { loadSettings, saveSettings, type Settings } from './store/settings'
 import { getBridge, blobToBase64 } from './store/bridge'
-import { getContextItems, useContextItems } from './store/context'
+import { getContextItems, useContextItems, setContextItems } from './store/context'
 import ContextPanel from './components/ContextPanel'
 import * as ai from './api/openai'
+import { chatKey, loadContext, saveContext } from './store/chatStorage'
 
 const WELCOME_MD = `# Welcome to Apertus Writer
 
@@ -57,7 +58,9 @@ export default function App() {
   const [showChat, setShowChat] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showContext, setShowContext] = useState(false)
-  const contextCount = useContextItems().length
+  const contextItems = useContextItems()
+  const contextCount = contextItems.length
+  const sessionKey = chatKey(filePath, docName)
   const [dirty, setDirty] = useState(false)
   const [codeView, setCodeView] = useState(false)
   const [codeText, setCodeText] = useState('')
@@ -198,6 +201,27 @@ export default function App() {
       setDirty(false)
     }).catch(() => { /* no saved session */ })
   }, [editor])
+
+  // Per-document reference context: load a document's saved attachments when
+  // it is opened, and persist changes. loadedRef gates the save effect so the
+  // pre-load state can't overwrite the stored set before loadContext resolves
+  // (same race that chat history had).
+  const contextLoadedRef = useRef(false)
+  useEffect(() => {
+    contextLoadedRef.current = false
+    let cancelled = false
+    void loadContext(sessionKey).then((loaded) => {
+      if (cancelled) return
+      setContextItems(loaded)
+      contextLoadedRef.current = true
+    })
+    return () => { cancelled = true }
+  }, [sessionKey])
+
+  useEffect(() => {
+    if (!contextLoadedRef.current) return
+    saveContext(sessionKey, contextItems)
+  }, [sessionKey, contextItems])
 
   // Live-toggle spellcheck when the setting changes
   useEffect(() => {
@@ -559,6 +583,7 @@ export default function App() {
             <ChatSidebar
               settings={settings}
               getDocumentMarkdown={getMarkdown}
+              sessionKey={sessionKey}
               onClose={() => setShowChat(false)}
             />
           </aside>
