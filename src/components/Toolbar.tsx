@@ -8,9 +8,13 @@ interface Props {
   onToggleCodeView: () => void
   autoSuggest: boolean
   onToggleAutoSuggest: () => void
+  zoom: number
+  onZoomChange: (z: number) => void
 }
 
-export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeView, autoSuggest, onToggleAutoSuggest }: Props) {
+const clampZoom = (z: number) => Math.min(2, Math.max(0.5, Math.round(z * 10) / 10))
+
+export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeView, autoSuggest, onToggleAutoSuggest, zoom, onZoomChange }: Props) {
   const [showTableMenu, setShowTableMenu] = useState(false)
   const tableMenuRef = useRef<HTMLDivElement>(null)
 
@@ -132,6 +136,14 @@ export default function Toolbar({ editor, onInsertImage, codeView, onToggleCodeV
         disabled={codeView} onClick={onToggleAutoSuggest}>✨ Auto</button>
       <button className={btn(codeView)} title="Toggle raw markdown code view (Ctrl+Shift+M)"
         onClick={onToggleCodeView}>{'</> Code'}</button>
+
+      <span className="tb-sep" />
+      <button className="tb-btn" title="Zoom out" disabled={codeView}
+        onClick={() => onZoomChange(clampZoom(zoom - 0.1))}>−</button>
+      <button className="tb-btn" title="Reset zoom (100%)" disabled={codeView}
+        onClick={() => onZoomChange(1)}>{Math.round(zoom * 100)}%</button>
+      <button className="tb-btn" title="Zoom in" disabled={codeView}
+        onClick={() => onZoomChange(clampZoom(zoom + 0.1))}>+</button>
     </div>
   )
 }

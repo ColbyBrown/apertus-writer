@@ -9,6 +9,12 @@ const fs = require('fs')
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
 const isDev = !app.isPackaged
 
+// Disable GPU compositing: this app is plain DOM/CSS (no WebGL/canvas/video),
+// and a sleep/wake cycle resets the OS GPU device, which Chromium recovers from
+// by restarting the GPU process and reloading the renderer — the "flash blank"
+// on wake. Software rasterization is plenty for a text editor and avoids that.
+app.disableHardwareAcceleration()
+
 let mainWindow = null
 
 function sendMenuAction(action) {

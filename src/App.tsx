@@ -54,6 +54,7 @@ export default function App() {
   const [filePath, setFilePath] = useState<string | null>(null)
   const [theme, setTheme] = useState<ThemeVars>(DEFAULT_THEME)
   const [themeName, setThemeName] = useState('Default')
+  const [zoom, setZoom] = useState(1)
   const [showStyles, setShowStyles] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -278,6 +279,7 @@ export default function App() {
     setDocName('untitled.md')
     setFilePath(null)
     setDirty(false)
+    scheduleSessionSave()
   }
 
   const loadMarkdown = (text: string, name: string, path: string | null = null) => {
@@ -285,6 +287,7 @@ export default function App() {
     setDocName(name)
     setFilePath(path)
     setDirty(false)
+    scheduleSessionSave()
   }
 
   const openDocument = async (file: File) => {
@@ -532,7 +535,8 @@ export default function App() {
           const next = { ...settingsRef.current, autoSuggestEnabled: !settingsRef.current.autoSuggestEnabled }
           setSettings(next)
           saveSettings(next)
-        }} />
+        }}
+        zoom={zoom} onZoomChange={setZoom} />
       <input ref={imageFileRef} type="file" accept="image/*" hidden
         onChange={(e) => e.target.files?.[0] && insertImage(e.target.files[0])} />
 
@@ -553,7 +557,7 @@ export default function App() {
               placeholder="# Raw markdown…"
             />
           ) : (
-            <div className="doc-page">
+            <div className="doc-page" style={{ zoom }}>
               <EditorContent editor={editor} />
             </div>
           )}
