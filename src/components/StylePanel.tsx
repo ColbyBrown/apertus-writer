@@ -83,6 +83,63 @@ const FONT_GROUPS: { label: string; fonts: { name: string; stack: string }[] }[]
 
 const CUSTOM = '__custom__'
 
+// Curated palette for the inline color picker — a spread of neutrals and
+// accents that covers the common text/heading/accent/background choices
+// without dragging in a full color-wheel widget (or the native picker,
+// whose controlled-value reopen bug is what this replaces).
+const PRESET_COLORS = [
+  '#111111', '#1f2328', '#3b3f45', '#57606a', '#8c959f', '#c9d1d9',
+  '#ffffff', '#f6f8fa', '#f3f4f6', '#e2e5e9', '#d0d7de', '#1b1d21',
+  '#0969da', '#58a6ff', '#1a7f37', '#2da44e', '#bf3989', '#cf222e',
+  '#8250df', '#6e7781', '#9e6a03', '#bf8700', '#0a3069', '#6e40c9',
+]
+
+// Validates a 3- or 6-digit hex string; returns a normalized #rrggbb or null.
+function normalizeHex(input: string): string | null {
+  const m = input.trim().replace(/^#/, '').toLowerCase()
+  if (/^[0-9a-f]{6}$/.test(m)) return `#${m}`
+  if (/^[0-9a-f]{3}$/.test(m)) return `#${m[0]}${m[0]}${m[1]}${m[1]}${m[2]}${m[2]}`
+  return null
+}
+
+function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+  return (
+    <div className="color-field">
+      <button
+        type="button"
+        className="color-swatch"
+        style={{ background: value }}
+        title={value}
+      />
+      <div className="color-presets">
+        {PRESET_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={'color-dot' + (c.toLowerCase() === value.toLowerCase() ? ' active' : '')}
+            style={{ background: c }}
+            onClick={() => onChange(c)}
+            title={c}
+          />
+        ))}
+      </div>
+      <input
+        className="color-hex"
+        value={draft}
+        onChange={(e) => {
+          const raw = e.target.value
+          setDraft(raw)
+          const norm = normalizeHex(raw)
+          if (norm) onChange(norm)
+        }}
+        onBlur={() => setDraft(value)}
+      />
+    </div>
+  )
+}
+
 function FontSelect({ value, onChange }: { value: string; onChange: (stack: string) => void }) {
   const known = FONT_GROUPS.flatMap((g) => g.fonts).some((f) => f.stack === value)
   const [customMode, setCustomMode] = useState(!known)
@@ -191,19 +248,19 @@ export default function StylePanel({ theme, themeName, onChange, onClose }: Prop
         <input value={vars['--doc-font-size']} onChange={(e) => set('--doc-font-size', e.target.value)} />
       </label>
       <label>Text color
-        <input type="color" value={vars['--doc-text-color']} onChange={(e) => set('--doc-text-color', e.target.value)} />
+        <ColorField value={vars['--doc-text-color']} onChange={(v) => set('--doc-text-color', v)} />
       </label>
       <label>Background
-        <input type="color" value={vars['--doc-bg']} onChange={(e) => set('--doc-bg', e.target.value)} />
+        <ColorField value={vars['--doc-bg']} onChange={(v) => set('--doc-bg', v)} />
       </label>
       <label>Heading color
-        <input type="color" value={vars['--doc-heading-color']} onChange={(e) => set('--doc-heading-color', e.target.value)} />
+        <ColorField value={vars['--doc-heading-color']} onChange={(v) => set('--doc-heading-color', v)} />
       </label>
       <label>Accent (links)
-        <input type="color" value={vars['--doc-accent']} onChange={(e) => set('--doc-accent', e.target.value)} />
+        <ColorField value={vars['--doc-accent']} onChange={(v) => set('--doc-accent', v)} />
       </label>
       <label>Code background
-        <input type="color" value={vars['--doc-code-bg']} onChange={(e) => set('--doc-code-bg', e.target.value)} />
+        <ColorField value={vars['--doc-code-bg']} onChange={(v) => set('--doc-code-bg', v)} />
       </label>
       <label>Page width
         <input value={vars['--doc-max-width']} onChange={(e) => set('--doc-max-width', e.target.value)} />
