@@ -131,7 +131,7 @@ body {
 
 /* Style panel */
 .style-panel { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
-.style-panel label, .modal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.style-panel label, .style-panel .field-label, .modal label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .style-panel input, .style-panel select, .modal input {
   padding: 5px 8px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 13px;
 }

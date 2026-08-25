@@ -230,21 +230,21 @@ export default function StylePanel({ theme, themeName, onChange, onClose }: Prop
       <label>Font size
         <input value={vars['--doc-font-size']} onChange={(e) => set('--doc-font-size', e.target.value)} />
       </label>
-      <label>Text color
+      <div className="field-label">Text color
         <ColorField value={vars['--doc-text-color']} onChange={(v) => set('--doc-text-color', v)} />
-      </label>
-      <label>Background
+      </div>
+      <div className="field-label">Background
         <ColorField value={vars['--doc-bg']} onChange={(v) => set('--doc-bg', v)} />
-      </label>
-      <label>Heading color
+      </div>
+      <div className="field-label">Heading color
         <ColorField value={vars['--doc-heading-color']} onChange={(v) => set('--doc-heading-color', v)} />
-      </label>
-      <label>Accent (links)
+      </div>
+      <div className="field-label">Accent (links)
         <ColorField value={vars['--doc-accent']} onChange={(v) => set('--doc-accent', v)} />
-      </label>
-      <label>Code background
+      </div>
+      <div className="field-label">Code background
         <ColorField value={vars['--doc-code-bg']} onChange={(v) => set('--doc-code-bg', v)} />
-      </label>
+      </div>
       <label>Page width
         <input value={vars['--doc-max-width']} onChange={(e) => set('--doc-max-width', e.target.value)} />
       </label>
