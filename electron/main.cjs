@@ -318,6 +318,32 @@ ipcMain.handle('write-file', async (_event, { filePath, base64 }) => {
   }
 })
 
+// IPC: write a sidecar .css style file next to a saved .md/.markdown/.txt
+// document so the theme travels with the file. Replaces the markdown
+// extension with .css. → { ok, error? }
+ipcMain.handle('write-sidecar', async (_event, { filePath, css }) => {
+  try {
+    const cssPath = filePath.replace(/\.(md|markdown|txt)$/i, '.css')
+    fs.writeFileSync(cssPath, css, 'utf8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+})
+
+// IPC: read a sidecar .css style file for a .md/.markdown/.txt document.
+// Returns css=null when no sidecar exists (a document without a saved style
+// opens with the default theme). → { ok, css? }
+ipcMain.handle('read-sidecar', async (_event, { filePath }) => {
+  try {
+    const cssPath = filePath.replace(/\.(md|markdown|txt)$/i, '.css')
+    if (!fs.existsSync(cssPath)) return { ok: true, css: null }
+    return { ok: true, css: fs.readFileSync(cssPath, 'utf8') }
+  } catch (err) {
+    return { ok: false, css: null }
+  }
+})
+
 // IPC: print the themed document via the native print dialog.
 // args: { html, css } → { ok, error? }
 ipcMain.handle('print-document', async (_event, { html, css }) => {

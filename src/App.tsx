@@ -189,7 +189,7 @@ export default function App() {
     restoredRef.current = true
     const bridge = getBridge()
     if (!bridge?.sessionLoad) return
-    bridge.sessionLoad().then((res) => {
+    bridge.sessionLoad().then(async (res) => {
       if (!res.ok || !res.session) return
       // Use the live editor instance rather than the closure capture: in dev
       // StrictMode the initial editor is destroyed and recreated before this
@@ -200,7 +200,20 @@ export default function App() {
       setDocName(res.session.docName)
       setFilePath(res.session.filePath)
       setDirty(false)
-    }).catch(() => { /* no saved session */ })
+      // Session restore bypasses openViaDialog, so read the sidecar here too —
+      // otherwise a relaunch shows the doc with the default theme, and a later
+      // save would overwrite its sidecar with that default.
+      if (bridge.readSidecar && res.session.filePath) {
+        const sc = await bridge.readSidecar({ filePath: res.session.filePath })
+        if (sc.ok && sc.css) {
+          setTheme(cssToTheme(sc.css))
+          setThemeName(res.session.docName.replace(/\.(md|markdown|txt)$/i, ''))
+        } else {
+          setTheme(DEFAULT_THEME)
+          setThemeName('Default')
+        }
+      }
+    }).catch(() => { /* no saved session or sidecar */ })
   }, [editor])
 
   // Per-document reference context: load a document's saved attachments when
@@ -279,6 +292,10 @@ export default function App() {
     setDocName('untitled.md')
     setFilePath(null)
     setDirty(false)
+    // A new doc has no sidecar; reset to the default theme so it doesn't
+    // inherit the previously-opened document's styling.
+    setTheme(DEFAULT_THEME)
+    setThemeName('Default')
     scheduleSessionSave()
   }
 
@@ -309,6 +326,19 @@ export default function App() {
     const res = await bridge.readFile({ filePath: choice.filePath })
     if (!res.ok || res.content === undefined) { flash(`Open failed: ${res.error}`); return }
     loadMarkdown(res.content, choice.filePath.split(/[\\/]/).pop() || choice.filePath, choice.filePath)
+    // Restore the document's sidecar theme if one was saved alongside it;
+    // otherwise fall back to the default theme so an unstyled doc doesn't
+    // inherit the previously-opened document's look.
+    if (bridge.readSidecar) {
+      const sc = await bridge.readSidecar({ filePath: choice.filePath })
+      if (sc.ok && sc.css) {
+        setTheme(cssToTheme(sc.css))
+        setThemeName((choice.filePath.split(/[\\/]/).pop() || 'theme').replace(/\.(md|markdown|txt)$/i, ''))
+      } else {
+        setTheme(DEFAULT_THEME)
+        setThemeName('Default')
+      }
+    }
   }
 
   // Save: in Electron, overwrite the current file directly; the save dialog
@@ -333,6 +363,12 @@ export default function App() {
       // Persist the (possibly new) name/path even though the content didn't
       // change in this save, so a restart restores the right file reference.
       scheduleSessionSave()
+      // Write the document's theme to a sidecar .css next to the .md so the
+      // style travels with the file (survives refresh, restart, and reopening).
+      if (bridge.writeSidecar) {
+        const sc = await bridge.writeSidecar({ filePath: path, css: themeToCss(theme) })
+        if (!sc.ok) flash(`Style save failed: ${sc.error}`)
+      }
       return
     }
     const blob = new Blob([md], { type: 'text/markdown' })
@@ -568,7 +604,7 @@ export default function App() {
             <StylePanel
               theme={theme}
               themeName={themeName}
-              onChange={(v, n) => { setTheme(v); setThemeName(n) }}
+              onChange={(v, n) => { setTheme(v); setThemeName(n); setDirty(true) }}
               onClose={() => setShowStyles(false)}
             />
             <div className="style-actions">

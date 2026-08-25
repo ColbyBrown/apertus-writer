@@ -14,6 +14,11 @@ export interface Bridge {
   printDocument(args: { html: string; css: string }): Promise<{ ok: boolean; error?: string }>
   sessionSave(args: { docName: string; filePath: string | null; content: string }): Promise<{ ok: boolean; error?: string }>
   sessionLoad(): Promise<{ ok: boolean; session?: { docName: string; filePath: string | null; content: string } | null }>
+  // Sidecar style file: writes/reads a .css file alongside a saved .md file so
+  // the document's theme travels with it. Inert in a plain browser (filePath
+  // is null there), and undefined when the bridge is absent.
+  writeSidecar(args: { filePath: string; css: string }): Promise<{ ok: boolean; error?: string }>
+  readSidecar(args: { filePath: string }): Promise<{ ok: boolean; css: string | null }>
   chatSave(args: { key: string; messages: unknown[] }): Promise<{ ok: boolean; error?: string }>
   chatLoad(args: { key: string }): Promise<{ ok: boolean; messages: unknown[] }>
   contextSave(args: { key: string; items: unknown[] }): Promise<{ ok: boolean; error?: string }>
