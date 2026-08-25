@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { HexColorPicker, HexColorInput } from 'react-colorful'
 
 // CSS theme model: a set of editable custom properties
 export interface ThemeVars {
@@ -82,6 +83,45 @@ const FONT_GROUPS: { label: string; fonts: { name: string; stack: string }[] }[]
 ]
 
 const CUSTOM = '__custom__'
+
+// Color field: a swatch button that opens a react-colorful popover
+// (saturation square + hue slider + hex input). The popover is a plain
+// <div> overlay — clicking the fixed backdrop closes it — so it can't
+// trigger the controlled <input type=color> reopen bug that native
+// pickers had here. `onChange` fires on every drag for live preview.
+function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const place = () => {
+    const r = btnRef.current!.getBoundingClientRect()
+    setPos({
+      top: Math.min(r.bottom + 4, window.innerHeight - 260),
+      left: Math.min(r.left, window.innerWidth - 220),
+    })
+  }
+  return (
+    <div className="color-field">
+      <button
+        ref={btnRef}
+        type="button"
+        className="color-swatch"
+        style={{ background: value }}
+        title={value}
+        onClick={() => { place(); setOpen(true) }}
+      />
+      {open && (
+        <>
+          <div className="color-popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="color-popover" style={pos}>
+            <HexColorPicker color={value} onChange={onChange} />
+            <HexColorInput color={value} onChange={onChange} prefixed />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 function FontSelect({ value, onChange }: { value: string; onChange: (stack: string) => void }) {
   const known = FONT_GROUPS.flatMap((g) => g.fonts).some((f) => f.stack === value)
@@ -190,21 +230,21 @@ export default function StylePanel({ theme, themeName, onChange, onClose }: Prop
       <label>Font size
         <input value={vars['--doc-font-size']} onChange={(e) => set('--doc-font-size', e.target.value)} />
       </label>
-      <label>Text color
-        <input type="color" value={vars['--doc-text-color']} onChange={(e) => set('--doc-text-color', e.target.value)} />
-      </label>
-      <label>Background
-        <input type="color" value={vars['--doc-bg']} onChange={(e) => set('--doc-bg', e.target.value)} />
-      </label>
-      <label>Heading color
-        <input type="color" value={vars['--doc-heading-color']} onChange={(e) => set('--doc-heading-color', e.target.value)} />
-      </label>
-      <label>Accent (links)
-        <input type="color" value={vars['--doc-accent']} onChange={(e) => set('--doc-accent', e.target.value)} />
-      </label>
-      <label>Code background
-        <input type="color" value={vars['--doc-code-bg']} onChange={(e) => set('--doc-code-bg', e.target.value)} />
-      </label>
+      <div className="field-label">Text color
+        <ColorField value={vars['--doc-text-color']} onChange={(v) => set('--doc-text-color', v)} />
+      </div>
+      <div className="field-label">Background
+        <ColorField value={vars['--doc-bg']} onChange={(v) => set('--doc-bg', v)} />
+      </div>
+      <div className="field-label">Heading color
+        <ColorField value={vars['--doc-heading-color']} onChange={(v) => set('--doc-heading-color', v)} />
+      </div>
+      <div className="field-label">Accent (links)
+        <ColorField value={vars['--doc-accent']} onChange={(v) => set('--doc-accent', v)} />
+      </div>
+      <div className="field-label">Code background
+        <ColorField value={vars['--doc-code-bg']} onChange={(v) => set('--doc-code-bg', v)} />
+      </div>
       <label>Page width
         <input value={vars['--doc-max-width']} onChange={(e) => set('--doc-max-width', e.target.value)} />
       </label>
