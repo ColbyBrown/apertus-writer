@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { HexColorPicker, HexColorInput } from 'react-colorful'
 
 // CSS theme model: a set of editable custom properties
 export interface ThemeVars {
@@ -83,59 +84,41 @@ const FONT_GROUPS: { label: string; fonts: { name: string; stack: string }[] }[]
 
 const CUSTOM = '__custom__'
 
-// Curated palette for the inline color picker — a spread of neutrals and
-// accents that covers the common text/heading/accent/background choices
-// without dragging in a full color-wheel widget (or the native picker,
-// whose controlled-value reopen bug is what this replaces).
-const PRESET_COLORS = [
-  '#111111', '#1f2328', '#3b3f45', '#57606a', '#8c959f', '#c9d1d9',
-  '#ffffff', '#f6f8fa', '#f3f4f6', '#e2e5e9', '#d0d7de', '#1b1d21',
-  '#0969da', '#58a6ff', '#1a7f37', '#2da44e', '#bf3989', '#cf222e',
-  '#8250df', '#6e7781', '#9e6a03', '#bf8700', '#0a3069', '#6e40c9',
-]
-
-// Validates a 3- or 6-digit hex string; returns a normalized #rrggbb or null.
-function normalizeHex(input: string): string | null {
-  const m = input.trim().replace(/^#/, '').toLowerCase()
-  if (/^[0-9a-f]{6}$/.test(m)) return `#${m}`
-  if (/^[0-9a-f]{3}$/.test(m)) return `#${m[0]}${m[0]}${m[1]}${m[1]}${m[2]}${m[2]}`
-  return null
-}
-
+// Color field: a swatch button that opens a react-colorful popover
+// (saturation square + hue slider + hex input). The popover is a plain
+// <div> overlay — clicking the fixed backdrop closes it — so it can't
+// trigger the controlled <input type=color> reopen bug that native
+// pickers had here. `onChange` fires on every drag for live preview.
 function ColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [draft, setDraft] = useState(value)
-  useEffect(() => setDraft(value), [value])
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const place = () => {
+    const r = btnRef.current!.getBoundingClientRect()
+    setPos({
+      top: Math.min(r.bottom + 4, window.innerHeight - 260),
+      left: Math.min(r.left, window.innerWidth - 220),
+    })
+  }
   return (
     <div className="color-field">
       <button
+        ref={btnRef}
         type="button"
         className="color-swatch"
         style={{ background: value }}
         title={value}
+        onClick={() => { place(); setOpen(true) }}
       />
-      <div className="color-presets">
-        {PRESET_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className={'color-dot' + (c.toLowerCase() === value.toLowerCase() ? ' active' : '')}
-            style={{ background: c }}
-            onClick={() => onChange(c)}
-            title={c}
-          />
-        ))}
-      </div>
-      <input
-        className="color-hex"
-        value={draft}
-        onChange={(e) => {
-          const raw = e.target.value
-          setDraft(raw)
-          const norm = normalizeHex(raw)
-          if (norm) onChange(norm)
-        }}
-        onBlur={() => setDraft(value)}
-      />
+      {open && (
+        <>
+          <div className="color-popover-backdrop" onClick={() => setOpen(false)} />
+          <div className="color-popover" style={pos}>
+            <HexColorPicker color={value} onChange={onChange} />
+            <HexColorInput color={value} onChange={onChange} prefixed />
+          </div>
+        </>
+      )}
     </div>
   )
 }

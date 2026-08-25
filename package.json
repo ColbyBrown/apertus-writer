@@ -25,7 +25,9 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -50,6 +52,7 @@
     "marked": "^15.0.0",
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
+    "react-colorful": "^5.8.0",
     "react-dom": "^18.3.1",
     "turndown": "^7.2.0"
   },
