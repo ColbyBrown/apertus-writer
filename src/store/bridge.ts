@@ -8,16 +8,17 @@ export interface Bridge {
   chooseOpenPath(): Promise<{ canceled: boolean; filePath?: string }>
   readFile(args: { filePath: string }): Promise<{ ok: boolean; content?: string; error?: string }>
   chooseSavePath(args: { docName: string }): Promise<{ canceled: boolean; filePath?: string }>
-  chooseExportPath(args: { docName: string }): Promise<{ canceled: boolean; filePath?: string; format?: 'docx' | 'odt' | 'pdf' }>
+  chooseExportPath(args: { docName: string; slides?: boolean }): Promise<{ canceled: boolean; filePath?: string; format?: 'docx' | 'odt' | 'pptx' | 'pdf' }>
   writeFile(args: { filePath: string; base64: string }): Promise<{ ok: boolean; error?: string }>
   exportPdfTo(args: { filePath: string; html: string; css: string }): Promise<{ ok: boolean; error?: string }>
+  exportSlidesPdfTo(args: { filePath: string; slidesHtml: string; css: string }): Promise<{ ok: boolean; error?: string }>
   printDocument(args: { html: string; css: string }): Promise<{ ok: boolean; error?: string }>
   sessionSave(args: { docName: string; filePath: string | null; content: string }): Promise<{ ok: boolean; error?: string }>
   sessionLoad(): Promise<{ ok: boolean; session?: { docName: string; filePath: string | null; content: string } | null }>
   // Sidecar style file: writes/reads a .css file alongside a saved .md file so
-  // the document's theme travels with it. Inert in a plain browser (filePath
-  // is null there), and undefined when the bridge is absent.
-  writeSidecar(args: { filePath: string; css: string }): Promise<{ ok: boolean; error?: string }>
+  // the document's theme + mode travels with it. Inert in a plain browser
+  // (filePath is null there), and undefined when the bridge is absent.
+  writeSidecar(args: { filePath: string; css: string; mode: 'document' | 'slides' }): Promise<{ ok: boolean; error?: string }>
   readSidecar(args: { filePath: string }): Promise<{ ok: boolean; css: string | null }>
   chatSave(args: { key: string; messages: unknown[] }): Promise<{ ok: boolean; error?: string }>
   chatLoad(args: { key: string }): Promise<{ ok: boolean; messages: unknown[] }>

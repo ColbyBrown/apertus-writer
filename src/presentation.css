@@ -1,0 +1,99 @@
+/* PresentationMode overlay — self-contained, themed via --doc-* vars (injected themeCss) */
+.presentation-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+.presentation-viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 16:9 slide, scaled to fit; content styled like .doc-page but slide-sized */
+.presentation-slide {
+  flex: none;
+  box-sizing: border-box;
+  transform-origin: center center;
+  overflow: hidden;
+  background: var(--doc-bg, #fff);
+  color: var(--doc-text-color, #1f2328);
+  font-family: var(--doc-font, Georgia, serif);
+  font-size: 28px;
+  line-height: 1.5;
+  padding: 56px 72px;
+}
+
+.presentation-slide h1, .presentation-slide h2, .presentation-slide h3, .presentation-slide h4,
+.presentation-slide h5, .presentation-slide h6 {
+  color: var(--doc-heading-color, #111);
+  line-height: 1.2;
+  margin: 0.4em 0 0.3em;
+}
+.presentation-slide h1 { font-size: 2.2em; }
+.presentation-slide h2 { font-size: 1.7em; }
+.presentation-slide h3 { font-size: 1.35em; }
+.presentation-slide h4 { font-size: 1.15em; }
+
+.presentation-slide p { margin: 0.45em 0; }
+.presentation-slide a { color: var(--doc-accent, #0969da); }
+.presentation-slide ul, .presentation-slide ol { padding-left: 1.4em; margin: 0.45em 0; }
+.presentation-slide code {
+  font-family: var(--doc-code-font, monospace);
+  background: var(--doc-code-bg, #f3f4f6);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+.presentation-slide pre {
+  background: var(--doc-code-bg, #f3f4f6);
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.presentation-slide pre code { background: none; padding: 0; font-size: 0.85em; }
+.presentation-slide blockquote {
+  border-left: 4px solid var(--doc-accent, #0969da);
+  margin: 0.45em 0;
+  padding-left: 18px;
+  opacity: 0.85;
+}
+.presentation-slide table { border-collapse: collapse; width: 100%; }
+.presentation-slide th, .presentation-slide td {
+  border: 1px solid #d0d7de;
+  padding: 6px 12px;
+  text-align: left;
+}
+.presentation-slide th { background: var(--doc-code-bg, #f3f4f6); }
+.presentation-slide img { max-width: 100%; }
+.presentation-slide hr { border: none; border-top: 1px solid #d0d7de; margin: 1em 0; }
+
+/* Subtle bottom chrome bar */
+.presentation-chrome {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #eee;
+  font: 14px system-ui, sans-serif;
+}
+.presentation-counter { font-variant-numeric: tabular-nums; opacity: 0.8; }
+.presentation-nav { display: flex; gap: 8px; }
+.presentation-nav button {
+  background: #2a2a2a;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.presentation-nav button:hover { background: #3a3a3a; }

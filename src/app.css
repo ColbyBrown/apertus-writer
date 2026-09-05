@@ -92,6 +92,39 @@ body {
   float: left; height: 0; pointer-events: none; opacity: 0.4;
 }
 
+/* Slide break node. In Document mode it looks like a normal horizontal rule;
+   in Slides mode (`.doc-page.slides`) it renders as a page-break divider. */
+.doc-page hr[data-type="slideBreak"] {
+  border: none;
+  border-top: 1px solid #d0d7de;
+  margin: 1em 0;
+}
+.doc-page.slides hr[data-type="slideBreak"] {
+  position: relative;
+  border: none;
+  height: 28px;
+  margin: 36px 0;
+  background: transparent;
+  page-break-after: always;
+  break-after: page;
+}
+.doc-page.slides hr[data-type="slideBreak"]::before {
+  content: "▪ slide break";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font: 11px system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b949e;
+  background: var(--doc-bg, #fff);
+  padding: 0 12px;
+  border-top: 1px dashed #d0d7de;
+  width: 60%;
+  text-align: center;
+}
+
 /* Raw markdown code view */
 .doc-codeview {
   flex: 1;

@@ -9,12 +9,15 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import Toolbar from './components/Toolbar'
+import PresentationMode from './components/PresentationMode'
+import SlideBreak from './components/SlideBreak'
 import ConfirmDialog from './components/ConfirmDialog'
-import StylePanel, { DEFAULT_THEME, themeToCss, cssToTheme, type ThemeVars } from './components/StylePanel'
+import StylePanel, { DEFAULT_THEME, themeToCss, cssToTheme, modeFromSidecar, stripSidecarMarker, type ThemeVars } from './components/StylePanel'
 import ChatSidebar from './components/ChatSidebar'
 import SettingsDialog from './components/SettingsDialog'
 import { Autocomplete } from './components/Autocomplete'
-import { markdownToHtml, htmlToMarkdown } from './store/markdown'
+import { markdownToHtml, htmlToMarkdown, markdownToEditorHtml } from './store/markdown'
+import { slidesToHtml } from './store/slidesPdf'
 import { loadSettings, saveSettings, type Settings } from './store/settings'
 import { getBridge, blobToBase64 } from './store/bridge'
 import { getContextItems, useContextItems, setContextItems } from './store/context'
@@ -64,6 +67,8 @@ export default function App() {
   const sessionKey = chatKey(filePath, docName)
   const [dirty, setDirty] = useState(false)
   const [codeView, setCodeView] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [mode, setMode] = useState<'document' | 'slides'>('document')
   const [codeText, setCodeText] = useState('')
   const openFileRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
@@ -158,6 +163,9 @@ export default function App() {
 
   const editor = useEditor({
     extensions: [
+      // Registered before StarterKit so its `---` input rule + parse rule win
+      // over the generic horizontal rule (which keeps `***`/`___`).
+      SlideBreak,
       StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
       Image,
       Link.configure({ openOnClick: false }),
@@ -171,7 +179,7 @@ export default function App() {
         shouldAutoSuggest: () => settingsRef.current.autoSuggestEnabled,
       }),
     ],
-    content: markdownToHtml(WELCOME_MD),
+    content: markdownToEditorHtml(WELCOME_MD),
     onUpdate: () => { setDirty(true); scheduleSessionSave() },
     editorProps: {
       attributes: { spellcheck: settings.spellcheckEnabled ? 'true' : 'false' },
@@ -196,7 +204,7 @@ export default function App() {
       // async callback runs.
       const ed = editorRef.current
       if (!ed) return
-      ed.commands.setContent(markdownToHtml(res.session.content))
+      ed.commands.setContent(markdownToEditorHtml(res.session.content))
       setDocName(res.session.docName)
       setFilePath(res.session.filePath)
       setDirty(false)
@@ -206,9 +214,11 @@ export default function App() {
       if (bridge.readSidecar && res.session.filePath) {
         const sc = await bridge.readSidecar({ filePath: res.session.filePath })
         if (sc.ok && sc.css) {
-          setTheme(cssToTheme(sc.css))
+          setMode(modeFromSidecar(sc.css))
+          setTheme(cssToTheme(stripSidecarMarker(sc.css)))
           setThemeName(res.session.docName.replace(/\.(md|markdown|txt)$/i, ''))
         } else {
+          setMode('document')
           setTheme(DEFAULT_THEME)
           setThemeName('Default')
         }
@@ -269,7 +279,7 @@ export default function App() {
     } else {
       const before = getMarkdown()
       if (codeText !== before) setDirty(true)
-      editor?.commands.setContent(markdownToHtml(codeText))
+      editor?.commands.setContent(markdownToEditorHtml(codeText))
       setCodeView(false)
     }
   }, [codeView, codeText, editor, getMarkdown])
@@ -292,15 +302,16 @@ export default function App() {
     setDocName('untitled.md')
     setFilePath(null)
     setDirty(false)
-    // A new doc has no sidecar; reset to the default theme so it doesn't
-    // inherit the previously-opened document's styling.
+    // A new doc has no sidecar; reset to the default theme + document mode so
+    // it doesn't inherit the previously-opened document's styling.
     setTheme(DEFAULT_THEME)
     setThemeName('Default')
+    setMode('document')
     scheduleSessionSave()
   }
 
   const loadMarkdown = (text: string, name: string, path: string | null = null) => {
-    editor?.commands.setContent(markdownToHtml(text))
+    editor?.commands.setContent(markdownToEditorHtml(text))
     setDocName(name)
     setFilePath(path)
     setDirty(false)
@@ -326,15 +337,17 @@ export default function App() {
     const res = await bridge.readFile({ filePath: choice.filePath })
     if (!res.ok || res.content === undefined) { flash(`Open failed: ${res.error}`); return }
     loadMarkdown(res.content, choice.filePath.split(/[\\/]/).pop() || choice.filePath, choice.filePath)
-    // Restore the document's sidecar theme if one was saved alongside it;
-    // otherwise fall back to the default theme so an unstyled doc doesn't
+    // Restore the document's sidecar theme + mode if one was saved alongside
+    // it; otherwise fall back to the defaults so an unstyled doc doesn't
     // inherit the previously-opened document's look.
     if (bridge.readSidecar) {
       const sc = await bridge.readSidecar({ filePath: choice.filePath })
       if (sc.ok && sc.css) {
-        setTheme(cssToTheme(sc.css))
+        setMode(modeFromSidecar(sc.css))
+        setTheme(cssToTheme(stripSidecarMarker(sc.css)))
         setThemeName((choice.filePath.split(/[\\/]/).pop() || 'theme').replace(/\.(md|markdown|txt)$/i, ''))
       } else {
+        setMode('document')
         setTheme(DEFAULT_THEME)
         setThemeName('Default')
       }
@@ -366,7 +379,7 @@ export default function App() {
       // Write the document's theme to a sidecar .css next to the .md so the
       // style travels with the file (survives refresh, restart, and reopening).
       if (bridge.writeSidecar) {
-        const sc = await bridge.writeSidecar({ filePath: path, css: themeToCss(theme) })
+        const sc = await bridge.writeSidecar({ filePath: path, css: themeToCss(theme), mode })
         if (!sc.ok) flash(`Style save failed: ${sc.error}`)
       }
       return
@@ -418,24 +431,37 @@ export default function App() {
     URL.revokeObjectURL(a.href)
   }
 
-  const buildExportBlob = async (format: 'docx' | 'odt'): Promise<Blob> => {
+  const buildExportBlob = async (format: 'docx' | 'odt' | 'pptx'): Promise<Blob> => {
     if (!editor) throw new Error('No document')
     if (format === 'docx') {
       const { buildDocx } = await import('./store/exportDocx')
       return buildDocx(editor.getHTML(), theme)
     }
+    if (format === 'pptx') {
+      const { buildPptx } = await import('./store/exportPptx')
+      return buildPptx(getMarkdown(), theme)
+    }
     const { buildOdt } = await import('./store/exportOdt')
     return buildOdt(editor.getHTML(), theme)
   }
 
-  // Browser fallback path (no native dialogs): download for the chosen format
-  const exportAs = async (format: 'docx' | 'odt' | 'pdf') => {
+  // Browser fallback path (no native dialogs): download for the chosen format.
+  // In slides mode, PDF prints one 16:9 page per slide via injected @page CSS.
+  const exportAs = async (format: 'docx' | 'odt' | 'pptx' | 'pdf') => {
     if (!editor) return
     setShowExportMenu(false)
     const base = docName.replace(/\.(md|markdown|txt)$/i, '')
     try {
       if (format === 'pdf') {
-        window.print()
+        if (mode === 'slides') {
+          const style = document.createElement('style')
+          style.textContent = '@page { size: 13.333in 7.5in; margin: 0; } body { margin: 0; padding: 0; font-family: var(--doc-font); font-size: calc(var(--doc-font-size) * 1.2); color: var(--doc-text-color); } .slide { width: 13.333in; height: 7.5in; box-sizing: border-box; padding: 0.6in 0.75in; overflow: hidden; page-break-after: always; } .slide h1 { font-size: calc(var(--doc-font-size) * 1.2 * 2); } .slide h2 { font-size: calc(var(--doc-font-size) * 1.2 * 1.5); } .slide h3 { font-size: calc(var(--doc-font-size) * 1.2 * 1.25); } .slide h4 { font-size: calc(var(--doc-font-size) * 1.2); }'
+          document.head.appendChild(style)
+          window.print()
+          style.remove()
+        } else {
+          window.print()
+        }
         return
       }
       downloadBlob(await buildExportBlob(format), `${base}.${format}`)
@@ -447,7 +473,9 @@ export default function App() {
 
   // Main export entry point. In Electron: one save dialog with format filters
   // — the chosen extension selects the format; message only after the file is
-  // actually written. In a browser: dropdown of formats → blob download.
+  // actually written. PPTX is only offered in slides mode. In slides mode, PDF
+  // renders one 16:9 page per slide (reuses the slides-PDF IPC). In a browser:
+  // dropdown of formats → blob download / print.
   const exportDocument = async () => {
     if (!editor) return
     const bridge = getBridge()
@@ -456,12 +484,21 @@ export default function App() {
       return
     }
     try {
-      const choice = await bridge.chooseExportPath({ docName })
+      const choice = await bridge.chooseExportPath({ docName, slides: mode === 'slides' })
       if (choice.canceled || !choice.filePath || !choice.format) return
       const { filePath, format } = choice
       if (format === 'pdf') {
-        const res = await bridge.exportPdfTo({ filePath, html: editor.getHTML(), css: themeToCss(theme) })
-        if (!res.ok) { flash(`Export failed: ${res.error}`); return }
+        if (mode === 'slides') {
+          const res = await bridge.exportSlidesPdfTo({
+            filePath,
+            slidesHtml: slidesToHtml(getMarkdown()),
+            css: themeToCss(theme),
+          })
+          if (!res.ok) { flash(`Export failed: ${res.error}`); return }
+        } else {
+          const res = await bridge.exportPdfTo({ filePath, html: editor.getHTML(), css: themeToCss(theme) })
+          if (!res.ok) { flash(`Export failed: ${res.error}`); return }
+        }
       } else {
         const blob = await buildExportBlob(format)
         const base64 = await blobToBase64(blob)
@@ -528,6 +565,16 @@ export default function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault()
         toggleCodeView()
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        if (mode !== 'slides') return
+        if (presenting) {
+          setPresenting(false)
+        } else {
+          if (codeView) toggleCodeView() // sync editor from raw markdown before presenting
+          editor?.commands.blur()
+          setPresenting(true)
+        }
       }
     }
     window.addEventListener('keydown', handler)
@@ -547,12 +594,22 @@ export default function App() {
           <button className="tb-btn" onClick={exportDocument}>Export…</button>
           {showExportMenu && (
             <div className="export-dropdown">
-              <button className="tb-btn" onClick={() => exportAs('docx')}>Word (.docx)</button>
-              <button className="tb-btn" onClick={() => exportAs('odt')}>OpenDocument (.odt)</button>
+              {mode !== 'slides' && (
+                <>
+                  <button className="tb-btn" onClick={() => exportAs('docx')}>Word (.docx)</button>
+                  <button className="tb-btn" onClick={() => exportAs('odt')}>OpenDocument (.odt)</button>
+                </>
+              )}
+              {mode === 'slides' && (
+                <button className="tb-btn" onClick={() => exportAs('pptx')}>PowerPoint (.pptx)</button>
+              )}
               <button className="tb-btn" onClick={() => exportAs('pdf')}>PDF (.pdf)</button>
             </div>
           )}
         </span>
+        {mode === 'slides' && (
+          <button className="tb-btn" disabled={codeView} onClick={() => setPresenting(true)}>▶ Present</button>
+        )}
         <span className="spacer" />
         <span className="doc-name">{docName}</span>
         <button className="tb-btn" title="Reference context for chat & autocomplete"
@@ -564,15 +621,18 @@ export default function App() {
         <button className="tb-btn" title="Settings" onClick={() => setShowSettings(true)}>⚙️</button>
       </header>
 
-      <Toolbar editor={editor} onInsertImage={() => imageFileRef.current?.click()}
-        codeView={codeView} onToggleCodeView={toggleCodeView}
-        autoSuggest={settings.autoSuggestEnabled}
-        onToggleAutoSuggest={() => {
-          const next = { ...settingsRef.current, autoSuggestEnabled: !settingsRef.current.autoSuggestEnabled }
-          setSettings(next)
-          saveSettings(next)
-        }}
-        zoom={zoom} onZoomChange={setZoom} />
+      {!presenting && (
+        <Toolbar editor={editor} onInsertImage={() => imageFileRef.current?.click()}
+          codeView={codeView} onToggleCodeView={toggleCodeView}
+          mode={mode}
+          autoSuggest={settings.autoSuggestEnabled}
+          onToggleAutoSuggest={() => {
+            const next = { ...settingsRef.current, autoSuggestEnabled: !settingsRef.current.autoSuggestEnabled }
+            setSettings(next)
+            saveSettings(next)
+          }}
+          zoom={zoom} onZoomChange={setZoom} />
+      )}
       <input ref={imageFileRef} type="file" accept="image/*" hidden
         onChange={(e) => e.target.files?.[0] && insertImage(e.target.files[0])} />
 
@@ -593,7 +653,7 @@ export default function App() {
               placeholder="# Raw markdown…"
             />
           ) : (
-            <div className="doc-page" style={{ zoom }}>
+            <div className={'doc-page' + (mode === 'slides' ? ' slides' : '')} style={{ zoom }}>
               <EditorContent editor={editor} />
             </div>
           )}
@@ -604,6 +664,8 @@ export default function App() {
             <StylePanel
               theme={theme}
               themeName={themeName}
+              mode={mode}
+              onModeChange={(m) => { setMode(m); setDirty(true); scheduleSessionSave() }}
               onChange={(v, n) => { setTheme(v); setThemeName(n); setDirty(true) }}
               onClose={() => setShowStyles(false)}
             />
@@ -629,6 +691,14 @@ export default function App() {
           </aside>
         )}
       </div>
+
+      {presenting && (
+        <PresentationMode
+          markdown={getMarkdown()}
+          themeCss={themeToCss(theme)}
+          onExit={() => setPresenting(false)}
+        />
+      )}
 
       {confirmNew && (
         <ConfirmDialog

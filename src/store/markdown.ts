@@ -1,12 +1,18 @@
 import { marked } from 'marked'
 import TurndownService from 'turndown'
+import { replaceSlideBreaks } from './slides'
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced',
   bulletListMarker: '-',
   emDelimiter: '*',
-  hr: '---',
+  hr: '***',
+})
+
+turndown.addRule('slideBreak', {
+  filter: (node) => node.nodeName === 'HR' && (node as Element).getAttribute('data-type') === 'slideBreak',
+  replacement: () => '\n\n---\n\n',
 })
 
 // Emit MarkdownGuide-style pipe tables (https://www.markdownguide.org/cheat-sheet/)
@@ -73,6 +79,14 @@ turndown.addRule('table', {
 
 export function markdownToHtml(md: string): string {
   return marked.parse(md, { async: false }) as string
+}
+
+// Markdown -> editor HTML. Standalone `---` boundaries become SlideBreak nodes
+// (via the marker) so they survive the round-trip as `---` instead of
+// collapsing into a plain `***` rule. In Document mode the node is styled as a
+// normal hr; in Slides mode it renders as a page break (see app.css).
+export function markdownToEditorHtml(md: string): string {
+  return markdownToHtml(replaceSlideBreaks(md))
 }
 
 export function htmlToMarkdown(html: string): string {
